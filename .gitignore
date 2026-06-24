@@ -1,0 +1,20 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+make-backup.sh
+
+# Large archives and binaries
+*.tar.gz
+*.zip
+*.apk
+*.idsig
+
+# Keys and credentials
+*.keystore
+
+# Agent documentation
+docs-for-agent/
