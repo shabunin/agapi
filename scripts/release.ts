@@ -67,12 +67,12 @@ function main() {
   // Windows artifacts
   const windowsTargetDir = path.join(projectRoot, 'src-tauri', 'target', 'x86_64-pc-windows-msvc', 'release');
   
-  // Look for NSIS installer
+  // Look for NSIS installer matching version
   const bundleNsisDir = path.join(windowsTargetDir, 'bundle', 'nsis');
   if (fs.existsSync(bundleNsisDir)) {
     const files = fs.readdirSync(bundleNsisDir);
     for (const file of files) {
-      if (file.endsWith('.exe')) {
+      if (file.endsWith('.exe') && file.includes(version)) {
         const destPath = path.join(windowsTargetDir, `agapi-${tagName}-x64-setup.exe`);
         fs.copyFileSync(path.join(bundleNsisDir, file), destPath);
         artifacts.push(destPath);
@@ -103,7 +103,10 @@ function main() {
     console.log(`Gathered Android APK: ${destPath}`);
   }
 
-  if (artifacts.length === 0) {
+  // Dedup artifacts to be absolutely safe
+  const uniqueArtifacts = [...new Set(artifacts)];
+
+  if (uniqueArtifacts.length === 0) {
     console.error('Error: No release artifacts found. Did builds complete successfully?');
     process.exit(1);
   }
@@ -136,7 +139,7 @@ function main() {
 
   // 7. Create GitHub Release using gh CLI
   console.log(`Creating GitHub Release for ${tagName}...`);
-  const artifactArgs = artifacts.map(art => `"${art}"`).join(' ');
+  const artifactArgs = uniqueArtifacts.map(art => `"${art}"`).join(' ');
   
   // Delete existing draft/release on GitHub if exists to avoid conflicts when retrying
   try {
