@@ -1,7 +1,7 @@
 {
   "name": "agapi",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -12,7 +12,11 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:android-tunnel": "adb -d reverse tcp:3000 tcp:3000 && tauri android dev --host 127.0.0.1"
+    "tauri:android-tunnel": "adb -d reverse tcp:3000 tcp:3000 && tauri android dev --host 127.0.0.1",
+    "build:windows": "tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis",
+    "build:android": "tauri android build --apk",
+    "version:bump": "tsx scripts/bump-version.ts",
+    "release": "tsx scripts/release.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

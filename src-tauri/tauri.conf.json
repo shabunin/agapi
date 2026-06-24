@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "agapi",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "identifier": "com.agapi.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -23,7 +23,9 @@
       "csp": "default-src 'self' blob: data:; img-src 'self' blob: data: asset: https://asset.localhost http://asset.localhost tauri://localhost; connect-src 'self' blob: data: ws: wss: http: https: asset: https://asset.localhost http://asset.localhost tauri://localhost ipc: http://ipc.localhost; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline';",
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**"
+        ]
       }
     }
   },
