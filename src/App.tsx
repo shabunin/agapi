@@ -3,10 +3,12 @@ import JSZip from 'jszip';
 import { Application, Assets } from 'pixi.js';
 import gsap from 'gsap';
 import { Upload, AlertCircle, Maximize2, Minimize2, FolderOpen, RefreshCw, Terminal } from 'lucide-react';
-import { parseGUI, CFProject } from './lib/parser';
-import { CFRenderer } from './lib/renderer';
-import { joinStore } from './lib/joinStore';
-import { CFAPI } from './lib/cf';
+import {
+  loadProject,
+  joinStore,
+  type CFProject,
+  type CFRenderer,
+} from '@agapi/cf-loader';
 
 // Disable createImageBitmap as it is notoriously buggy in WebKitGTK (Tauri Linux)
 // causing WebGL textures to swap, corrupt, or bleed into each other.
@@ -177,146 +179,31 @@ export default function App() {
   };
 
   const startProject = async (guiXml: string, imageMap: Record<string, string>, scriptMap: Record<string, string>) => {
-    console.log("Parsing GUI");
-    await new Promise(resolve => setTimeout(resolve, 50));
-    const project = await parseGUI(guiXml);
-
-    console.log("Clearing gsap");
-    gsap.globalTimeline.clear();
-
-    console.log("Checking existing renderer...");
-    if (rendererRef.current) {
-      // Do NOT destroy the app. Just remove children to avoid WebGL context loss.
-      appRef.current?.stage.removeChildren();
-      rendererRef.current = null;
-    }
-    joinStore.clear();
-
     const canvas = canvasRef.current;
     if (!canvas) throw new Error("Canvas reference missing");
 
-    const width = orientation === 'landscape' ? (project.properties.landscape?.width || 1024) : (project.properties.portrait?.width || 768);
-    const height = orientation === 'landscape' ? (project.properties.landscape?.height || 768) : (project.properties.portrait?.height || 1024);
+    // Yield so loading UI can paint before heavy parse/render
+    await new Promise(resolve => setTimeout(resolve, 50));
 
-    let app = appRef.current;
-    if (!app) {
-      app = new Application();
-      await app.init({
-        canvas,
-        width,
-        height,
-        backgroundColor: 0x000000,
-        resolution: window.devicePixelRatio || 1,
-        autoDensity: true,
-        antialias: true,
-        preference: "webgl",
-      });
-      appRef.current = app;
-    } else {
-      app.renderer.resize(width, height);
-    }
+    const result = await loadProject({
+      guiXml,
+      imageMap,
+      scriptMap,
+      canvas,
+      app: appRef.current,
+      orientation,
+      debugMode,
+      previousRenderer: rendererRef.current,
+      onOrientationChange: (newO) => setOrientation(newO),
+    });
 
-    const renderer = new CFRenderer(app, project, imageMap);
-    renderer.targetOrientation = orientation;
-    renderer.setDebugMode(debugMode);
-
-    CFAPI.makeGlobal(renderer);
-    const globalCF = (window as any).CF;
-    renderer.cfApi = globalCF;
-    renderer.onOrientationChange = (newO) => {
-      setOrientation(newO);
-    };
-    globalCF.userMain = undefined;
-
-    if (project.scripts) {
-      for (const scriptNode of project.scripts) {
-        if (scriptNode.name) {
-          const targetName = scriptNode.name.toLowerCase().replace(/\\/g, '/');
-          const targetLeaf = targetName.split('/').pop() || "";
-
-          let scriptContent = "";
-          for (const [key, content] of Object.entries(scriptMap)) {
-            const normalizedKey = key.toLowerCase().replace(/\\/g, '/');
-            if (
-              normalizedKey === targetName ||
-              normalizedKey.endsWith("/" + targetName) ||
-              normalizedKey === targetLeaf ||
-              normalizedKey.endsWith("/" + targetLeaf)
-            ) {
-              scriptContent = content;
-              break;
-            }
-          }
-
-          if (scriptContent) {
-            try {
-              const blobContent = `${scriptContent}\n//# sourceURL=cf-script://${scriptNode.name}`;
-              const blob = new Blob([blobContent], { type: 'application/javascript' });
-              const blobUrl = URL.createObjectURL(blob);
-              const scriptElement = document.createElement('script');
-              scriptElement.src = blobUrl;
-
-              await new Promise((resolve) => {
-                scriptElement.onload = resolve;
-                scriptElement.onerror = resolve;
-                document.head.appendChild(scriptElement);
-              });
-
-              // Track the element so revokeAllBlobUrls() can remove it on next load
-              scriptElementsRef.current.push(scriptElement);
-            } catch (e) {
-              console.error(`Error executing project script ${scriptNode.name}:`, e);
-            }
-          }
-        }
-      }
-    }
-
-    rendererRef.current = renderer;
-    await renderer.start();
-
-    // Call module setup functions
-    if (globalCF && Array.isArray(globalCF.modules)) {
-      for (const mod of globalCF.modules) {
-        if (typeof mod.setup === 'function') {
-          try {
-            mod.setup.call(mod.object || window);
-          } catch (e) {
-            console.error(`Error in module setup for ${mod.name}:`, e);
-          }
-        }
-      }
-    }
-
-    const userMainFn = typeof globalCF.userMain === 'function'
-      ? globalCF.userMain
-      : typeof (window as any).userMain === 'function' ? (window as any).userMain : undefined;
-
-    if (userMainFn) {
-      try {
-        userMainFn();
-      } catch (e) {
-        console.error("Error in CF.userMain:", e);
-      }
-    }
-
-    // Now that scripts are loaded and userMain has executed (registering watchers),
-    // we can safely start the external control systems.
-    if (globalCF && typeof globalCF.startSystems === 'function') {
-      globalCF.startSystems();
-    }
-
-    // Dispatch PreloadingCompleteEvent after userMain has run.
-    // Use setTimeout(0) so watchers registered inside userMain() are in place before the event fires.
-
-    setTimeout(() => {
-      if (globalCF && typeof globalCF.dispatchEvent === 'function') {
-        globalCF.dispatchEvent(globalCF.PreloadingCompleteEvent);
-      }
-    }, 0);
+    appRef.current = result.app;
+    rendererRef.current = result.renderer;
+    scriptElementsRef.current.push(...result.scriptElements);
+    blobUrlsRef.current.push(...result.scriptBlobUrls);
 
     console.log("Project loaded successfully!");
-    setProject(project);
+    setProject(result.project);
     setProjectLoaded(true);
   };
 

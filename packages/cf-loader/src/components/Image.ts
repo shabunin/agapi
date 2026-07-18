@@ -47,7 +47,7 @@ export function renderImage(
                     const mode = (window as any).CF?.imageRequestMode || 'custom';
                     if ((window as any).__TAURI_INTERNALS__ && mode === 'custom') {
                         try {
-                            const http = (await import('../http')).default;
+                            const http = (await import('@agapi/stdlib/http')).default;
                             const result = await new Promise<{ body: Uint8Array, contentType: string }>((resolve, reject) => {
                                 const req = http.get(loadUrl, (res) => {
                                     const statusCode = (res as any).statusCode || 200;
@@ -56,7 +56,7 @@ export function renderImage(
                                         return;
                                     }
                                     const chunks: Uint8Array[] = [];
-                                    res.on('data', (chunk) => {
+                                    res.on('data', (chunk: Uint8Array) => {
                                         chunks.push(chunk);
                                     });
                                     res.on('end', () => {
@@ -68,16 +68,16 @@ export function renderImage(
                                             offset += c.length;
                                         }
                                         let contentType = 'image/jpeg';
-                                        for (const [k, v] of Object.entries(res.headers)) {
+                                        for (const [k, v] of Object.entries(res.headers as Record<string, string>)) {
                                             if (k.toLowerCase() === 'content-type') {
-                                                contentType = v;
+                                                contentType = String(v);
                                                 break;
                                             }
                                         }
                                         resolve({ body: fullBody, contentType });
                                     });
                                 });
-                                req.on('error', (err) => reject(err));
+                                req.on('error', (err: Error) => reject(err));
                             });
 
                             const blob = new Blob([result.body], { type: result.contentType });

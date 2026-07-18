@@ -28,7 +28,8 @@ export function request(
     const doRequest = async () => {
         if ((window as any).__TAURI_INTERNALS__) {
             try {
-                const http = (await import('../http')).default;
+                // Prefer stdlib http (host-backed after installStdlib)
+                const http = (await import('@agapi/stdlib/http')).default;
                 
                 const requestOptions: any = {
                     url,
