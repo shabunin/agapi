@@ -16,6 +16,8 @@ export default defineConfig(({mode}) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+      // Prefer workspace package.json "exports" for @agapi/*
+      dedupe: ['@agapi/stdlib', '@agapi/host-tauri', '@agapi/host-protocol'],
     },
     server: {
       allowedHosts: true,
@@ -34,6 +36,10 @@ export default defineConfig(({mode}) => {
           main: 'index.html',
         },
       },
+    },
+    // Allow importing .ts sources from workspace packages
+    optimizeDeps: {
+      exclude: ['@agapi/stdlib', '@agapi/host-tauri', '@agapi/host-protocol'],
     },
   };
 });

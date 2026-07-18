@@ -1,0 +1,22 @@
+{
+  "name": "@agapi/stdlib",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./events": "./src/events.ts",
+    "./errors": "./src/errors.ts",
+    "./host": "./src/host.ts",
+    "./net": "./src/net/index.ts",
+    "./dgram": "./src/dgram/index.ts",
+    "./http": "./src/http/index.ts",
+    "./install": "./src/install.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@agapi/host-protocol": "0.0.1"
+  }
+}

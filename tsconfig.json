@@ -15,9 +15,25 @@
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@agapi/host-protocol": [
+        "packages/host-protocol/src/index.ts"
+      ],
+      "@agapi/stdlib": [
+        "packages/stdlib/src/index.ts"
+      ],
+      "@agapi/stdlib/*": [
+        "packages/stdlib/src/*"
+      ],
+      "@agapi/host-tauri": [
+        "packages/host-tauri/src/index.ts"
+      ],
+      "@agapi/host-tauri/*": [
+        "packages/host-tauri/src/*"
       ]
     },
     "allowImportingTsExtensions": true,

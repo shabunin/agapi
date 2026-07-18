@@ -2,21 +2,25 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
-import net, { dgram } from './lib/net';
-import * as http from './lib/http';
-import { TauriNetworkProvider } from './lib/tauri-net/provider';
+import { installStdlib, net, dgram } from '@agapi/stdlib';
+import { createTauriHost } from '@agapi/host-tauri';
+
+// Layer bootstrap:
+//   tauri-rust ← tauri-js (host-tauri) ← stdlib-js ← application / CF scripts
+const isTauri =
+  typeof window !== 'undefined' &&
+  !!(window as any).__TAURI_INTERNALS__;
+
+if (isTauri) {
+  installStdlib(createTauriHost());
+} else {
+  // Browser preview: mock net/dgram only (http needs real host)
+  (window as any).net = net;
+  (window as any).dgram = dgram;
+  console.warn('[agapi] running without Tauri — mock net/dgram; http server unavailable');
+}
 
 (window as any).CF = (window as any).CF || {};
-(window as any).net = net;
-(window as any).dgram = dgram;
-(window as any).http = http;
-
-// Set Tauri Network Provider for real socket operations
-try {
-  net.setProvider(new TauriNetworkProvider());
-} catch (e) {
-  console.warn("Could not set Tauri Network Provider (maybe running in plain browser?)", e);
-}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
