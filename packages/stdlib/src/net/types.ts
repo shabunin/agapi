@@ -7,8 +7,17 @@ export interface ITcpSocket {
   connect(options: any, connectionListener?: () => void): this;
   connect(path: string, connectionListener?: () => void): this;
 
-  write(data: string | Uint8Array, encoding?: string, callback?: () => void): boolean;
-  end(data?: string | Uint8Array, encoding?: string, callback?: () => void): this;
+  write(
+    data: string | Uint8Array,
+    encoding?: string,
+    callback?: (err?: Error | null) => void
+  ): boolean;
+  end(
+    data?: string | Uint8Array,
+    encoding?: string,
+    callback?: () => void
+  ): this;
+  /** Half-close write side (Node-like); keep reading until peer closes. */
   destroy(err?: Error): this;
   destroySoon(): this;
   resetAndDestroy(): this;
@@ -43,19 +52,26 @@ export interface ITcpSocket {
 }
 
 export interface IUdpSocket {
-  bind(port?: number, address?: string, callback?: () => void): this;
-  send(
-    msg: string | Uint8Array,
-    offset: number,
-    length: number,
-    port: number,
-    address: string,
-    callback?: (error: Error | null) => void
-  ): void;
+  bind(port?: number | object | (() => void), address?: string | (() => void), callback?: () => void): this;
+  /** Node-style overloaded send — host implementation accepts rest args. */
+  send(msg: any, ...args: any[]): void;
   close(callback?: () => void): this;
+  address?(): { address: string; family: string; port: number };
+  remoteAddress?(): { address?: string; port?: number; family: string };
+  connect?(port: number, address?: string, callback?: () => void): void;
+  disconnect?(): void;
   addMembership(multicastAddress: string, multicastInterface?: string): void;
   dropMembership(multicastAddress: string, multicastInterface?: string): void;
   setBroadcast(flag: boolean): void;
+  setTTL?(ttl: number): void;
+  setMulticastTTL?(ttl: number): void;
+  setMulticastLoopback?(flag: boolean): void;
+  getRecvBufferSize?(): number;
+  setRecvBufferSize?(size: number): void;
+  getSendBufferSize?(): number;
+  setSendBufferSize?(size: number): void;
+  ref?(): this;
+  unref?(): this;
 
   on(event: string, listener: (...args: any[]) => void): this;
   once(event: string, listener: (...args: any[]) => void): this;

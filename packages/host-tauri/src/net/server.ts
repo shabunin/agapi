@@ -1,8 +1,9 @@
 import { EventEmitter, ITcpServer } from '@agapi/stdlib/net';
+import { mapHostError } from '@agapi/stdlib/errors';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { TauriTcpSocket, activeSockets, ensureGlobalSocketListener } from './socket';
-import { NetEventPayload, isIPv6 } from '@agapi/stdlib/net';
+import { TauriTcpSocket } from './socket';
+import type { NetEventPayload } from '@agapi/stdlib/net';
 
 export const activeServers = new Map<string, TauriTcpServer>();
 
@@ -105,8 +106,15 @@ export class TauriTcpServer extends EventEmitter implements ITcpServer {
 
                 this.emit('listening');
             })
-            .catch(err => {
-                this.emit('error', new Error(String(err)));
+            .catch((err) => {
+                this.emit(
+                    'error',
+                    mapHostError(err, {
+                        syscall: 'listen',
+                        address: host,
+                        port,
+                    })
+                );
             });
 
         return this;
@@ -118,7 +126,7 @@ export class TauriTcpServer extends EventEmitter implements ITcpServer {
             case 'connection':
                 if (payload.data) {
                     const clientId = new TextDecoder().decode(new Uint8Array(payload.data));
-                    
+
                     if (this.activeConnections.size >= this.maxConnections) {
                         invoke('tcp_destroy', { id: clientId }).catch(console.error);
                         if (this.dropMaxConnection) {
@@ -128,14 +136,13 @@ export class TauriTcpServer extends EventEmitter implements ITcpServer {
                                 localFamily: this.localFamily || 'IPv4',
                                 remoteAddress: payload.remote_address || '',
                                 remotePort: payload.remote_port || 0,
-                                remoteFamily: payload.family || 'IPv4'
+                                remoteFamily: payload.family || 'IPv4',
                             };
                             this.emit('drop', dropData);
                         }
                         return;
                     }
 
-                    // Newly accepted socket will automatically register itself in activeSockets and ensure socket listener is active
                     const socket = new TauriTcpSocket(clientId);
                     socket.remoteAddress = payload.remote_address || undefined;
                     socket.remotePort = payload.remote_port || undefined;
@@ -158,27 +165,37 @@ export class TauriTcpServer extends EventEmitter implements ITcpServer {
                 this.isServerClosedReceived = true;
                 this.checkPendingClose();
                 break;
-            case 'error':
-                const err = new Error(payload.error || 'Unknown error');
+            case 'error': {
+                const err = mapHostError(payload.error || 'Unknown error', {
+                    syscall: 'accept',
+                    address: this.localAddress,
+                    port: this.localPort,
+                });
                 this.emit('error', err);
                 break;
+            }
         }
     }
 
     close(callback?: (err?: Error) => void): this {
         if (!this.serverId) {
-            if (callback) setTimeout(() => callback(new Error("Server is not listening")), 0);
+            if (callback) {
+                setTimeout(
+                    () => callback(mapHostError('Server is not listening', { syscall: 'close' })),
+                    0
+                );
+            }
             return this;
         }
 
         this.isClosing = true;
         this.closeCallback = callback || null;
 
-        invoke('tcp_server_close', { id: this.serverId })
-            .catch(err => {
-                if (callback) callback(new Error(String(err)));
-                else this.emit('error', new Error(String(err)));
-            });
+        invoke('tcp_server_close', { id: this.serverId }).catch((err) => {
+            const mapped = mapHostError(err, { syscall: 'close' });
+            if (callback) callback(mapped);
+            else this.emit('error', mapped);
+        });
 
         return this;
     }

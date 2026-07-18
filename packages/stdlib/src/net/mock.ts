@@ -81,22 +81,32 @@ export class MockTcpSocket extends EventEmitter implements ITcpSocket {
     return this;
   }
 
-  write(data: string | Uint8Array, _encoding: string = 'utf8', callback?: () => void): boolean {
-    if (this.destroyed) {
-      this.emit('error', new Error('Socket is closed'));
+  write(data: string | Uint8Array, _encoding: string = 'utf8', callback?: (err?: Error | null) => void): boolean {
+    if (this.destroyed || this.readyState === 'readOnly') {
+      const err = new Error('Socket is closed');
+      this.emit('error', err);
+      if (callback) setTimeout(() => callback(err), 0);
       return false;
     }
     const len = typeof data === 'string' ? new TextEncoder().encode(data).length : data.length;
     this.bytesWritten += len;
     console.log(`[Mock TCP Write -> ${this.remoteAddress}:${this.remotePort}]`, data);
-    if (callback) setTimeout(callback, 0);
+    if (callback) setTimeout(() => callback(null), 0);
     return true;
   }
 
   end(data?: string | Uint8Array, encoding?: string, callback?: () => void): this {
-    if (data) this.write(data, encoding, callback);
-    this.emit('end');
-    this.destroy();
+    if (data) {
+      this.write(data, encoding, () => {
+        this.readyState = 'readOnly';
+        this.emit('finish');
+        if (callback) callback();
+      });
+    } else {
+      this.readyState = 'readOnly';
+      this.emit('finish');
+      if (callback) setTimeout(callback, 0);
+    }
     return this;
   }
 
@@ -285,14 +295,22 @@ export class MockUdpSocket extends EventEmitter implements IUdpSocket {
     return this;
   }
 
-  send(
-    msg: string | Uint8Array,
-    _offset: number,
-    _length: number,
-    port: number,
-    address: string,
-    callback?: (error: Error | null) => void
-  ): void {
+  send(msg: any, ...args: any[]): void {
+    let port = 0;
+    let address = '127.0.0.1';
+    let callback: ((error: Error | null) => void) | undefined;
+    if (typeof args[args.length - 1] === 'function') {
+      callback = args.pop();
+    }
+    if (args.length === 1) {
+      port = args[0];
+    } else if (args.length === 2) {
+      port = args[0];
+      address = args[1];
+    } else if (args.length === 4) {
+      port = args[2];
+      address = args[3];
+    }
     console.log(`[Mock UDP Send -> ${address}:${port}]`, msg);
     if (callback) setTimeout(() => callback(null), 0);
   }

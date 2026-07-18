@@ -3,6 +3,8 @@ import { setHost } from './host';
 import { net } from './net/manager';
 import { dgram } from './dgram/index';
 import http from './http/index';
+import { installBufferGlobal } from './buffer';
+import { installProcessGlobal } from './process';
 
 export interface InstallOptions {
   /**
@@ -10,6 +12,8 @@ export interface InstallOptions {
    * Defaults to true in browser/webview environments.
    */
   globals?: boolean;
+  /** Also install global Buffer / process (default true when globals is true). */
+  nodeGlobals?: boolean;
   /** Global object to attach to (default: globalThis). */
   target?: typeof globalThis;
 }
@@ -21,13 +25,19 @@ export function installStdlib(host: AgapiHost, options: InstallOptions = {}): vo
   setHost(host);
   net.setProvider(host.net);
 
+  const target = options.target ?? globalThis;
   const useGlobals = options.globals !== false;
   if (useGlobals) {
-    const g = (options.target ?? globalThis) as any;
+    const g = target as any;
     g.net = net;
     g.dgram = dgram;
     g.http = http;
     g.__AGAPI_HOST__ = host.name;
+
+    if (options.nodeGlobals !== false) {
+      installBufferGlobal(target);
+      installProcessGlobal(target);
+    }
   }
 
   console.log(`[stdlib] installed host "${host.name}"`);

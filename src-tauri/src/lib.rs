@@ -43,6 +43,7 @@ pub fn run() {
             plugins::net::tcp::tcp_connect,
             plugins::net::tcp::tcp_write,
             plugins::net::tcp::tcp_destroy,
+            plugins::net::tcp::tcp_shutdown,
             plugins::net::tcp::tcp_listen,
             plugins::net::tcp::tcp_server_close,
             plugins::net::tcp::tcp_set_keep_alive,

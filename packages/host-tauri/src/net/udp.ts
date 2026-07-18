@@ -1,4 +1,7 @@
-import { EventEmitter, NetEventPayload } from '@agapi/stdlib/net';
+import { EventEmitter } from '@agapi/stdlib/net';
+import type { NetEventPayload } from '@agapi/stdlib/net';
+import { Buffer } from '@agapi/stdlib/buffer';
+import { mapHostError } from '@agapi/stdlib/errors';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
@@ -120,8 +123,11 @@ export class TauriUdpSocket extends EventEmitter {
                 }
                 this.emit('listening');
             })
-            .catch(err => {
-                this.emit('error', new Error(String(err)));
+            .catch((err) => {
+                this.emit(
+                    'error',
+                    mapHostError(err, { syscall: 'bind', address, port })
+                );
             });
 
         return this;
@@ -145,7 +151,7 @@ export class TauriUdpSocket extends EventEmitter {
                             family: event.payload.family || (this.options.type === 'udp4' ? 'IPv4' : 'IPv6'),
                             size: event.payload.data.length
                         };
-                        this.emit('message', new Uint8Array(event.payload.data), rinfo);
+                        this.emit('message', Buffer.from(event.payload.data), rinfo);
                     }
                     break;
                 case 'connect':
@@ -155,10 +161,13 @@ export class TauriUdpSocket extends EventEmitter {
                     this.emit('close');
                     this.cleanup();
                     break;
-                case 'error':
-                    const err = new Error(event.payload.error || 'Unknown error');
+                case 'error': {
+                    const err = mapHostError(event.payload.error || 'Unknown error', {
+                        syscall: 'udp',
+                    });
                     this.emit('error', err);
                     break;
+                }
             }
         });
     }
@@ -192,8 +201,11 @@ export class TauriUdpSocket extends EventEmitter {
                 this.remotePort = port;
                 if (callback) callback();
             })
-            .catch(err => {
-                this.emit('error', new Error(String(err)));
+            .catch((err) => {
+                this.emit(
+                    'error',
+                    mapHostError(err, { syscall: 'connect', address: addr, port })
+                );
             });
     }
 
@@ -245,11 +257,24 @@ export class TauriUdpSocket extends EventEmitter {
         if (args.length === 0) {
             // send(msg, cb) - connected socket
             if (!this.isConnected) {
-                const err = new Error("Destination address is required for connectionless socket");
+                const err = mapHostError(
+                    'Destination address is required for connectionless socket',
+                    { syscall: 'send' }
+                );
                 if (callback) callback(err);
                 else this.emit('error', err);
                 return;
             }
+            offset = 0;
+            length = getMessageLength(msg);
+        } else if (args.length === 1) {
+            // send(msg, port, cb) — address defaults to localhost / connected peer
+            port = args[0];
+            address = this.isConnected
+                ? this.remoteAddr
+                : this.options.type === 'udp4'
+                  ? '127.0.0.1'
+                  : '::1';
             offset = 0;
             length = getMessageLength(msg);
         } else if (args.length === 2) {
@@ -258,6 +283,16 @@ export class TauriUdpSocket extends EventEmitter {
             address = args[1];
             offset = 0;
             length = getMessageLength(msg);
+        } else if (args.length === 3) {
+            // send(msg, offset, length, port, cb) without address
+            offset = args[0];
+            length = args[1];
+            port = args[2];
+            address = this.isConnected
+                ? this.remoteAddr
+                : this.options.type === 'udp4'
+                  ? '127.0.0.1'
+                  : '::1';
         } else if (args.length === 4) {
             // send(msg, offset, length, port, address, cb)
             offset = args[0];
@@ -265,7 +300,7 @@ export class TauriUdpSocket extends EventEmitter {
             port = args[2];
             address = args[3];
         } else {
-            const err = new Error("Invalid arguments to send");
+            const err = mapHostError('Invalid arguments to send', { syscall: 'send' });
             if (callback) callback(err);
             else this.emit('error', err);
             return;
@@ -311,8 +346,12 @@ export class TauriUdpSocket extends EventEmitter {
             .then(() => {
                 if (callback) callback(null);
             })
-            .catch(err => {
-                const error = new Error(String(err));
+            .catch((err) => {
+                const error = mapHostError(err, {
+                    syscall: 'send',
+                    address: address || undefined,
+                    port: port || undefined,
+                });
                 if (callback) callback(error);
                 else this.emit('error', error);
             });

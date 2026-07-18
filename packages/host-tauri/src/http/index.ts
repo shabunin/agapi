@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { EventEmitter } from '@agapi/stdlib/events';
+import { mapHostError } from '@agapi/stdlib/errors';
 
 export interface HttpRequestEvent {
     id: string;
@@ -151,7 +152,7 @@ export class Server extends EventEmitter {
             if (callback) callback();
             this.emit('listening');
         } catch (error) {
-            this.emit('error', new Error(String(error)));
+            this.emit('error', mapHostError(error, { syscall: 'listen', port }));
         }
     }
 
@@ -167,6 +168,7 @@ export class Server extends EventEmitter {
                 this.emit('close');
                 if (callback) callback();
             } catch (error) {
+                this.emit('error', mapHostError(error, { syscall: 'close', port: this.port ?? undefined }));
                 if (callback) callback();
             }
         } else {
@@ -244,8 +246,8 @@ export class ClientRequest extends EventEmitter {
                 this.callback(incoming);
             }
             this.emit('response', incoming);
-        }).catch(err => {
-            this.emit('error', new Error(String(err)));
+        }).catch((err) => {
+            this.emit('error', mapHostError(err, { syscall: 'request', address: url }));
         });
     }
 }

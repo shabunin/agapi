@@ -43,6 +43,10 @@ installStdlib(createTauriHost()); // sets window.net / dgram / http
 4. **application shell** prefers `@agapi/cf-loader` + `@agapi/stdlib`; Tauri only in bootstrap.
 5. Compat tiers: T0 events/process → T1 net/dgram/http → T2 streams → T3 fs.
 
+## Compat tiers
+
+See [COMPAT.md](./COMPAT.md) for T0/T1 Node-shaped API details (Buffer, errors, half-close).
+
 ## Branch
 
 Work lives on `feat/stdlib-runtime`.

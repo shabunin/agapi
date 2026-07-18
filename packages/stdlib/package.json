@@ -7,6 +7,8 @@
     ".": "./src/index.ts",
     "./events": "./src/events.ts",
     "./errors": "./src/errors.ts",
+    "./buffer": "./src/buffer.ts",
+    "./process": "./src/process.ts",
     "./host": "./src/host.ts",
     "./net": "./src/net/index.ts",
     "./dgram": "./src/dgram/index.ts",
