@@ -8,8 +8,9 @@ Target: **Node-shaped APIs** for CF scripts and control protocols — not a full
 |------|---------|--------|
 | **T0** | `events`, `Buffer`, `process` (partial) | ✅ shipped |
 | **T1** | `net`, `dgram`, `http` (+ host) | ✅ happy-path + polish |
+| **T1+** | `dns.lookup`, `tls.connect` (client) | ✅ |
 | **T2** | `stream` / backpressure | ❌ not yet |
-| **T3** | `fs`, `dns` module | ❌ not yet |
+| **T3** | `fs` subset | ❌ not yet |
 
 ## Globals (after `installStdlib`)
 
@@ -18,6 +19,8 @@ Target: **Node-shaped APIs** for CF scripts and control protocols — not a full
 | `net` | TCP client/server |
 | `dgram` | UDP |
 | `http` | createServer / request / get / WebSocketServer |
+| `dns` | `lookup` / `lookupAsync` |
+| `tls` | `connect` (client only) |
 | `Buffer` | minimal subset (from/alloc/concat/toString) |
 | `process` | `env`, `platform`, `nextTick`, `cwd()` stub |
 
@@ -52,13 +55,46 @@ socket.on('error', (err) => {
 | `send` overloads | msg+port, msg+port+addr, offset/length forms |
 | multicast / broadcast / TTL | supported on Tauri host |
 
+## DNS
+
+```js
+dns.lookup('example.com', (err, address, family) => {
+  // address: string, family: 4 | 6
+});
+
+dns.lookup('example.com', { family: 4, all: true }, (err, addresses) => {
+  // addresses: [{ address, family }, ...]
+});
+```
+
+Uses OS resolver via Rust `tokio::net::lookup_host`.
+
+## TLS (client)
+
+```js
+const s = tls.connect({
+  host: 'example.com',
+  port: 443,
+  servername: 'example.com',      // SNI
+  rejectUnauthorized: true,       // false = accept any cert (lab/dev)
+  // ALPNProtocols: ['http/1.1'],
+}, () => {
+  s.write('GET / HTTP/1.1\r\nHost: example.com\r\n\r\n');
+});
+s.on('data', (buf) => console.log(buf.toString()));
+```
+
+Events: `secureConnect`, `connect`, `data` (Buffer), `finish`, `end`, `close`, `error`.  
+No `tls.createServer` yet.
+
 ## Explicit non-goals (for now)
 
 - Duplex streams / `pipe` / real `drain`
-- `tls` / `https` server as first-class
+- `tls.createServer` / full `https` Agent
 - `child_process`, `worker_threads`
 - Full Node `Buffer` / encodings matrix
 - Exact `err.errno` numbers per OS
+- Client certs / custom CA files (can add later)
 
 ## CF usage
 

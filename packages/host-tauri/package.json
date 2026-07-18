@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./net": "./src/net/index.ts",
-    "./http": "./src/http/index.ts"
+    "./http": "./src/http/index.ts",
+    "./dns": "./src/dns.ts",
+    "./tls": "./src/tls/index.ts"
   },
   "files": [
     "src"

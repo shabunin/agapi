@@ -13,6 +13,8 @@
     "./net": "./src/net/index.ts",
     "./dgram": "./src/dgram/index.ts",
     "./http": "./src/http/index.ts",
+    "./dns": "./src/dns/index.ts",
+    "./tls": "./src/tls/index.ts",
     "./install": "./src/install.ts"
   },
   "files": [

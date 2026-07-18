@@ -16,10 +16,47 @@ export interface HttpHost {
   WebSocketServer?: new (options: { port: number }) => any;
 }
 
+export interface DnsLookupOptions {
+  family?: number;
+  hints?: number;
+  all?: boolean;
+  verbatim?: boolean;
+  order?: 'ipv4first' | 'ipv6first' | 'verbatim';
+}
+
+export interface DnsLookupAddress {
+  address: string;
+  family: number;
+}
+
+export interface DnsHost {
+  name: string;
+  lookup(
+    hostname: string,
+    options?: DnsLookupOptions
+  ): Promise<DnsLookupAddress | DnsLookupAddress[]>;
+}
+
+export interface TlsConnectOptions {
+  host?: string;
+  port?: number;
+  servername?: string;
+  rejectUnauthorized?: boolean;
+  ALPNProtocols?: string[];
+  path?: string;
+}
+
+export interface TlsHost {
+  name: string;
+  connect(options: TlsConnectOptions): ITcpSocket;
+}
+
 export interface AgapiHost {
   name: string;
   net: NetHost;
   http?: HttpHost;
+  dns?: DnsHost;
+  tls?: TlsHost;
 }
 
 /** Runtime slot set by installStdlib(). */

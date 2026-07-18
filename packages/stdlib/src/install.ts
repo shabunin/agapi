@@ -3,6 +3,8 @@ import { setHost } from './host';
 import { net } from './net/manager';
 import { dgram } from './dgram/index';
 import http from './http/index';
+import dns from './dns/index';
+import tls from './tls/index';
 import { installBufferGlobal } from './buffer';
 import { installProcessGlobal } from './process';
 
@@ -32,6 +34,8 @@ export function installStdlib(host: AgapiHost, options: InstallOptions = {}): vo
     g.net = net;
     g.dgram = dgram;
     g.http = http;
+    g.dns = dns;
+    g.tls = tls;
     g.__AGAPI_HOST__ = host.name;
 
     if (options.nodeGlobals !== false) {
@@ -51,6 +55,8 @@ export function uninstallStdlib(options: InstallOptions = {}): void {
     delete g.net;
     delete g.dgram;
     delete g.http;
+    delete g.dns;
+    delete g.tls;
     delete g.__AGAPI_HOST__;
   }
 }
