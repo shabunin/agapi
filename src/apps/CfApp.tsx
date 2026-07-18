@@ -1,27 +1,31 @@
-import React, { useState, useRef, useEffect } from 'react';
-import JSZip from 'jszip';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Application, Assets } from 'pixi.js';
 import gsap from 'gsap';
-import { Upload, AlertCircle, Maximize2, Minimize2, FolderOpen, RefreshCw, Terminal } from 'lucide-react';
+import { Upload, AlertCircle, FolderOpen, RefreshCw } from 'lucide-react';
 import {
   loadProject,
   joinStore,
   type CFProject,
   type CFRenderer,
-} from '@agapi/cf-loader';
+} from '@agapi/cf-runtime';
+import {
+  openProjectFromZipFile,
+  openProjectNative,
+  revokeBlobUrls,
+  type ProjectAssets,
+} from './cf/openProject';
 
-// Disable createImageBitmap as it is notoriously buggy in WebKitGTK (Tauri Linux)
-// causing WebGL textures to swap, corrupt, or bleed into each other.
-Assets.setPreferences({
-  preferCreateImageBitmap: false
-});
-
+// WebKitGTK (Tauri Linux): createImageBitmap corrupts WebGL textures
+Assets.setPreferences({ preferCreateImageBitmap: false });
 
 export interface CfAppProps {
-  /** Return to shell launcher */
   onBack?: () => void;
 }
 
+/**
+ * Thin CF shell: open assets → loadProject(@agapi/cf-runtime) → canvas.
+ * No parser/renderer/CF API here — that lives in the package.
+ */
 export default function CfApp({ onBack }: CfAppProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +34,7 @@ export default function CfApp({ onBack }: CfAppProps) {
   const [debugMode, setDebugMode] = useState(false);
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [isFullscreen, setIsFullscreen] = useState(false);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,34 +43,26 @@ export default function CfApp({ onBack }: CfAppProps) {
   const blobUrlsRef = useRef<string[]>([]);
   const scriptElementsRef = useRef<HTMLScriptElement[]>([]);
 
-  const revokeAllBlobUrls = () => {
-    blobUrlsRef.current.forEach(url => {
-      try {
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        console.error("Failed to revoke blob URL", url, e);
-      }
-    });
+  const cleanupAssets = useCallback(() => {
+    revokeBlobUrls(blobUrlsRef.current);
     blobUrlsRef.current = [];
-
-    // Remove injected project script elements from document.head and revoke their blob URLs
-    scriptElementsRef.current.forEach(el => {
+    scriptElementsRef.current.forEach((el) => {
       try {
-        if (el.parentNode) el.parentNode.removeChild(el);
+        el.parentNode?.removeChild(el);
         if (el.src?.startsWith('blob:')) URL.revokeObjectURL(el.src);
-      } catch (e) {
-        console.error("Failed to remove script element", el, e);
+      } catch {
+        /* ignore */
       }
     });
     scriptElementsRef.current = [];
-  };
+  }, []);
 
-  const actionsRef = useRef({ handleNativeOpen: () => { }, toggleFullscreen: () => { } });
+  const actionsRef = useRef({ handleNativeOpen: () => {}, toggleFullscreen: () => {} });
 
   useEffect(() => {
     let unmounted = false;
     let unlistenFn: (() => void) | undefined;
-    import('@tauri-apps/api/event').then(api => {
+    import('@tauri-apps/api/event').then((api) => {
       api.listen('menu-action', (event) => {
         const action = event.payload as string;
         switch (action) {
@@ -79,14 +76,14 @@ export default function CfApp({ onBack }: CfAppProps) {
             window.location.reload();
             break;
           case 'devtools':
-            import('@tauri-apps/api/core').then(core => {
-              core.invoke('is_devtools_open').then(isOpen => {
+            import('@tauri-apps/api/core').then((core) => {
+              core.invoke('is_devtools_open').then((isOpen) => {
                 core.invoke('set_devtools', { open: !isOpen });
               });
             });
             break;
           case 'outline':
-            setDebugMode(prev => !prev);
+            setDebugMode((prev) => !prev);
             break;
           case 'fullscreen':
             actionsRef.current.toggleFullscreen();
@@ -98,17 +95,14 @@ export default function CfApp({ onBack }: CfAppProps) {
             setOrientation('portrait');
             break;
         }
-      }).then(u => {
-        if (unmounted) {
-          u();
-        } else {
-          unlistenFn = u;
-        }
+      }).then((u) => {
+        if (unmounted) u();
+        else unlistenFn = u;
       });
     });
     return () => {
       unmounted = true;
-      if (unlistenFn) unlistenFn();
+      unlistenFn?.();
     };
   }, []);
 
@@ -119,95 +113,95 @@ export default function CfApp({ onBack }: CfAppProps) {
   }, []);
 
   useEffect(() => {
-    if (projectLoaded && project) {
-      const o = orientation;
-      const width = o === 'landscape' ? (project.properties.landscape?.width || 1024) : (project.properties.portrait?.width || 768);
-      const height = o === 'landscape' ? (project.properties.landscape?.height || 768) : (project.properties.portrait?.height || 1024);
-      console.log(`[AutoResize] Attempting to set window size to ${width}x${height} for ${o}`);
-      import('@tauri-apps/api/core').then(core => {
-        core.invoke('resize_window', { width: Number(width), height: Number(height) }).catch(console.error);
-      });
-    }
+    if (!projectLoaded || !project) return;
+    const o = orientation;
+    const width =
+      o === 'landscape'
+        ? project.properties.landscape?.width || 1024
+        : project.properties.portrait?.width || 768;
+    const height =
+      o === 'landscape'
+        ? project.properties.landscape?.height || 768
+        : project.properties.portrait?.height || 1024;
+    import('@tauri-apps/api/core').then((core) => {
+      core
+        .invoke('resize_window', { width: Number(width), height: Number(height) })
+        .catch(console.error);
+    });
   }, [projectLoaded, project, orientation]);
 
   useEffect(() => {
     return () => {
       gsap.globalTimeline.clear();
-      if (rendererRef.current) {
-        rendererRef.current.destroy();
-      } else if (appRef.current) {
+      if (rendererRef.current) rendererRef.current.destroy();
+      else if (appRef.current) {
         appRef.current.destroy({ removeView: false }, { children: true });
       }
       joinStore.clear();
-      revokeAllBlobUrls();
+      cleanupAssets();
     };
-  }, []);
+  }, [cleanupAssets]);
 
   useEffect(() => {
-    if (rendererRef.current) {
-      rendererRef.current.setDebugMode(debugMode);
-    }
+    rendererRef.current?.setDebugMode(debugMode);
   }, [debugMode]);
 
   useEffect(() => {
-    if (appRef.current && rendererRef.current && rendererRef.current.project) {
-      const proj = rendererRef.current.project;
-      const o = orientation;
-      const width = o === 'landscape' ? (proj.properties.landscape?.width || 1024) : (proj.properties.portrait?.width || 768);
-      const height = o === 'landscape' ? (proj.properties.landscape?.height || 768) : (proj.properties.portrait?.height || 1024);
-      appRef.current.renderer.resize(width, height);
-      if (rendererRef.current.currentPageName) {
-        rendererRef.current.navigate(rendererRef.current.currentPageName, o);
-      }
+    if (!appRef.current || !rendererRef.current?.project) return;
+    const proj = rendererRef.current.project;
+    const o = orientation;
+    const width =
+      o === 'landscape'
+        ? proj.properties.landscape?.width || 1024
+        : proj.properties.portrait?.width || 768;
+    const height =
+      o === 'landscape'
+        ? proj.properties.landscape?.height || 768
+        : proj.properties.portrait?.height || 1024;
+    appRef.current.renderer.resize(width, height);
+    if (rendererRef.current.currentPageName) {
+      rendererRef.current.navigate(rendererRef.current.currentPageName, o);
     }
   }, [orientation]);
 
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(document.fullscreenElement === containerRef.current);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
+    const onFs = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(err => {
-        console.error("Error attempting to enable fullscreen:", err);
-      });
+      containerRef.current.requestFullscreen().catch(console.error);
     } else {
       document.exitFullscreen();
     }
   };
 
-  const startProject = async (guiXml: string, imageMap: Record<string, string>, scriptMap: Record<string, string>) => {
+  const boot = async (assets: ProjectAssets) => {
     const canvas = canvasRef.current;
-    if (!canvas) throw new Error("Canvas reference missing");
+    if (!canvas) throw new Error('Canvas reference missing');
 
-    // Yield so loading UI can paint before heavy parse/render
-    await new Promise(resolve => setTimeout(resolve, 50));
+    blobUrlsRef.current.push(...assets.blobUrls);
+    await new Promise((r) => setTimeout(r, 50));
 
     const result = await loadProject({
-      guiXml,
-      imageMap,
-      scriptMap,
+      guiXml: assets.guiXml,
+      imageMap: assets.imageMap,
+      scriptMap: assets.scriptMap,
       canvas,
       app: appRef.current,
       orientation,
       debugMode,
       previousRenderer: rendererRef.current,
-      onOrientationChange: (newO) => setOrientation(newO),
+      onOrientationChange: setOrientation,
     });
 
     appRef.current = result.app;
     rendererRef.current = result.renderer;
     scriptElementsRef.current.push(...result.scriptElements);
     blobUrlsRef.current.push(...result.scriptBlobUrls);
-
-    console.log("Project loaded successfully!");
     setProject(result.project);
     setProjectLoaded(true);
   };
@@ -215,43 +209,15 @@ export default function CfApp({ onBack }: CfAppProps) {
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     setLoading(true);
     setError(null);
     setProject(null);
-    revokeAllBlobUrls();
-
+    cleanupAssets();
     try {
-      const zip = await JSZip.loadAsync(file);
-      let guiXml = "";
-      const imageMap: Record<string, string> = {};
-      const scriptMap: Record<string, string> = {};
-
-      for (const [path, zipEntry] of Object.entries(zip.files)) {
-        if (zipEntry.dir) continue;
-        const filename = path.split('/').pop() || "";
-
-        if (filename.toLowerCase().endsWith('.gui')) {
-          guiXml = await zipEntry.async("string");
-        } else if (/\.(png|jpe?g|gif|webp|svg)$/i.test(filename)) {
-          const rawBlob = await zipEntry.async("blob");
-          const ext = filename.split('.').pop()?.toLowerCase() || 'png';
-          const mimeType = ext === 'jpg' ? 'image/jpeg' : (ext === 'svg' ? 'image/svg+xml' : `image/${ext}`);
-          const blob = new Blob([rawBlob], { type: mimeType });
-          const blobUrl = URL.createObjectURL(blob);
-          imageMap[filename] = blobUrl;
-          blobUrlsRef.current.push(blobUrl);
-        } else if (filename.toLowerCase().endsWith('.js')) {
-          scriptMap[path] = await zipEntry.async("string");
-        }
-      }
-
-      if (!guiXml) throw new Error("No .gui file found in the zip archive.");
-      await startProject(guiXml, imageMap, scriptMap);
+      await boot(await openProjectFromZipFile(file));
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "An unknown error occurred");
-      setProject(null);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       setProjectLoaded(false);
     } finally {
       if (event.target) event.target.value = '';
@@ -261,73 +227,19 @@ export default function CfApp({ onBack }: CfAppProps) {
 
   const handleNativeOpen = async () => {
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const { readTextFile, readFile, writeFile, mkdir, readDir } = await import('@tauri-apps/plugin-fs');
-      const { dirname, join, tempDir } = await import('@tauri-apps/api/path');
-      const { convertFileSrc } = await import('@tauri-apps/api/core');
-
-      const selectedPath = await open({
-        multiple: false,
-        filters: [{ name: 'CF GUI Files', extensions: ['gui', 'zip'] }]
-      });
-
-      if (!selectedPath || typeof selectedPath !== 'string') return;
-
       setLoading(true);
       setError(null);
-      setProject(null);
-      revokeAllBlobUrls();
-
-      let guiXml = "";
-      const imageMap: Record<string, string> = {};
-      const scriptMap: Record<string, string> = {};
-
-      if (selectedPath.toLowerCase().endsWith('.zip')) {
-        const fileData = await readFile(selectedPath);
-        const zip = await JSZip.loadAsync(fileData);
-
-        const tempDirPath = await tempDir();
-        const extractPath = await join(tempDirPath, 'agapi_extracted');
-
-        try { await mkdir(extractPath, { recursive: true }); } catch (e) { }
-
-        for (const [path, zipEntry] of Object.entries(zip.files)) {
-          if (zipEntry.dir) continue;
-          const filename = path.split('/').pop() || "";
-
-          if (filename.toLowerCase().endsWith('.gui')) {
-            guiXml = await zipEntry.async("string");
-          } else if (/\.(png|jpe?g|gif|webp|svg)$/i.test(filename)) {
-            const buffer = await zipEntry.async("uint8array");
-            const outPath = await join(extractPath, filename);
-            await writeFile(outPath, buffer);
-            imageMap[filename] = convertFileSrc(outPath);
-          } else if (filename.toLowerCase().endsWith('.js')) {
-            scriptMap[path] = await zipEntry.async("string");
-          }
-        }
-      } else if (selectedPath.toLowerCase().endsWith('.gui')) {
-        guiXml = await readTextFile(selectedPath);
-        const dir = await dirname(selectedPath);
-        const entries = await readDir(dir);
-
-        for (const entry of entries) {
-          if (!entry.isFile) continue;
-          if (/\.(png|jpe?g|gif|webp|svg)$/i.test(entry.name)) {
-            const filePath = await join(dir, entry.name);
-            imageMap[entry.name] = convertFileSrc(filePath);
-          } else if (entry.name.toLowerCase().endsWith('.js')) {
-            scriptMap[entry.name] = await readTextFile(await join(dir, entry.name));
-          }
-        }
+      const assets = await openProjectNative();
+      if (!assets) {
+        setLoading(false);
+        return;
       }
-
-      if (!guiXml) throw new Error("No .gui file found.");
-      await startProject(guiXml, imageMap, scriptMap);
+      setProject(null);
+      cleanupAssets();
+      await boot(assets);
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "An unknown error occurred");
-      setProject(null);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       setProjectLoaded(false);
     } finally {
       setLoading(false);
@@ -337,31 +249,46 @@ export default function CfApp({ onBack }: CfAppProps) {
   actionsRef.current = { handleNativeOpen, toggleFullscreen };
 
   const currentWidth = project
-    ? (orientation === 'landscape' ? (project.properties.landscape?.width || 1024) : (project.properties.portrait?.width || 768))
+    ? orientation === 'landscape'
+      ? project.properties.landscape?.width || 1024
+      : project.properties.portrait?.width || 768
     : 1024;
   const currentHeight = project
-    ? (orientation === 'landscape' ? (project.properties.landscape?.height || 768) : (project.properties.portrait?.height || 1024))
+    ? orientation === 'landscape'
+      ? project.properties.landscape?.height || 768
+      : project.properties.portrait?.height || 1024
     : 768;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col">
-      <input type="file" accept=".zip" className="hidden" ref={fileInputRef} onChange={handleFileUpload} disabled={loading} />
+      <input
+        type="file"
+        accept=".zip"
+        className="hidden"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        disabled={loading}
+      />
 
-      {/* Main Content */}
       <div className="flex-1 overflow-auto relative bg-black flex">
         {!projectLoaded && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10 p-4">
-            <div className="bg-gray-800 p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50 backdrop-blur-sm">
+            <div className="bg-gray-800 p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50">
               <h1 className="text-3xl font-bold mb-2 text-center bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
                 CF App
               </h1>
-              <p className="text-center text-gray-500 text-sm mb-6">CommandFusion / iViewer project runtime</p>
+              <p className="text-center text-gray-500 text-sm mb-2">
+                Shell for @agapi/cf-runtime
+              </p>
+              <p className="text-center text-gray-600 text-xs mb-6 font-mono">
+                open assets → loadProject()
+              </p>
 
               {onBack && (
                 <button
                   type="button"
                   onClick={onBack}
-                  className="w-full mb-4 text-sm text-gray-400 hover:text-white py-2 rounded-lg border border-gray-700 hover:border-gray-500 transition-colors"
+                  className="w-full mb-4 text-sm text-gray-400 hover:text-white py-2 rounded-lg border border-gray-700 hover:border-gray-500"
                 >
                   ← Back to launcher
                 </button>
@@ -371,119 +298,107 @@ export default function CfApp({ onBack }: CfAppProps) {
                 <button
                   onClick={handleNativeOpen}
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-3 bg-blue-600/90 hover:bg-blue-600 text-white py-3.5 px-4 rounded-xl transition-all font-medium active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-blue-500/20"
+                  className="w-full flex items-center justify-center gap-3 bg-blue-600/90 hover:bg-blue-600 text-white py-3.5 px-4 rounded-xl font-medium disabled:opacity-50"
                 >
                   <FolderOpen size={20} />
-                  Open Project (native fs .gui/.gui.zip)
+                  Open Project (native fs)
                 </button>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-3 bg-purple-600/90 hover:bg-purple-600 text-white py-3.5 px-4 rounded-xl transition-all font-medium active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-purple-500/20"
+                  className="w-full flex items-center justify-center gap-3 bg-purple-600/90 hover:bg-purple-600 text-white py-3.5 px-4 rounded-xl font-medium disabled:opacity-50"
                 >
                   <Upload size={20} />
-                  Open Project (jszip .gui.zip)
+                  Open Project (.gui.zip)
                 </button>
               </div>
 
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Settings</h3>
-                  <label className="flex items-center gap-3 cursor-pointer group p-3 bg-gray-700/30 rounded-xl hover:bg-gray-700/50 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={debugMode}
-                      onChange={(e) => setDebugMode(e.target.checked)}
-                      className="w-5 h-5 rounded border-gray-600 text-blue-500 focus:ring-blue-500 bg-gray-800"
-                    />
-                    <span className="text-gray-300 group-hover:text-white transition-colors font-medium">Show Outline</span>
-                  </label>
-                </div>
-
-                <div>
-                  <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Orientation</h3>
-                  <div className="flex gap-3">
-                    <label className={`flex items-center justify-center gap-2 cursor-pointer flex-1 py-3 px-2 rounded-xl transition-colors border ${orientation === 'landscape' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-gray-700/30 border-transparent text-gray-400 hover:bg-gray-700/50 hover:text-gray-300'}`}>
+              <div className="space-y-4">
+                <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-700/30 rounded-xl">
+                  <input
+                    type="checkbox"
+                    checked={debugMode}
+                    onChange={(e) => setDebugMode(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-600 text-blue-500 bg-gray-800"
+                  />
+                  <span className="text-gray-300 font-medium">Show Outline</span>
+                </label>
+                <div className="flex gap-3">
+                  {(['landscape', 'portrait'] as const).map((o) => (
+                    <label
+                      key={o}
+                      className={`flex-1 text-center py-3 rounded-xl border cursor-pointer text-sm font-medium capitalize ${
+                        orientation === o
+                          ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                          : 'bg-gray-700/30 border-transparent text-gray-400'
+                      }`}
+                    >
                       <input
                         type="radio"
                         name="orientation"
-                        value="landscape"
-                        checked={orientation === 'landscape'}
-                        onChange={() => setOrientation('landscape')}
                         className="hidden"
+                        checked={orientation === o}
+                        onChange={() => setOrientation(o)}
                       />
-                      <span className="font-medium text-sm">Landscape</span>
+                      {o}
                     </label>
-                    <label className={`flex items-center justify-center gap-2 cursor-pointer flex-1 py-3 px-2 rounded-xl transition-colors border ${orientation === 'portrait' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-gray-700/30 border-transparent text-gray-400 hover:bg-gray-700/50 hover:text-gray-300'}`}>
-                      <input
-                        type="radio"
-                        name="orientation"
-                        value="portrait"
-                        checked={orientation === 'portrait'}
-                        onChange={() => setOrientation('portrait')}
-                        className="hidden"
-                      />
-                      <span className="font-medium text-sm">Portrait</span>
-                    </label>
-                  </div>
+                  ))}
                 </div>
               </div>
 
               {loading && (
-                <div className="mt-8 flex items-center justify-center gap-3 text-blue-400 p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                <div className="mt-8 flex items-center justify-center gap-3 text-blue-400 p-4 bg-blue-500/10 rounded-xl">
                   <RefreshCw className="animate-spin" size={20} />
-                  <span className="font-medium">Loading project...</span>
+                  <span className="font-medium">Loading…</span>
                 </div>
               )}
               {error && (
-                <div className="mt-8 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-400 text-sm">
-                  <AlertCircle size={20} className="shrink-0 mt-0.5" />
-                  <p className="font-medium leading-relaxed">{error}</p>
+                <div className="mt-8 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex gap-3 text-red-400 text-sm">
+                  <AlertCircle size={20} className="shrink-0" />
+                  <p className="font-medium">{error}</p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* The Canvas wrapper */}
         <div
           ref={containerRef}
-          className={`relative overflow-hidden transition-opacity duration-500 ${projectLoaded ? 'opacity-100 block' : 'opacity-0 hidden'}`}
-          style={isFullscreen ? {
-            width: '100vw',
-            height: '100vh',
-            maxWidth: '100vw',
-            maxHeight: '100vh',
-            background: '#000000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          } : {
-            /* We can let it scale automatically to fit screen using max-width/max-height */
-            maxWidth: '100%',
-            maxHeight: '100%',
-            aspectRatio: `${currentWidth} / ${currentHeight}`
-          }}
+          className={`relative overflow-hidden transition-opacity duration-500 ${
+            projectLoaded ? 'opacity-100 block' : 'opacity-0 hidden'
+          }`}
+          style={
+            isFullscreen
+              ? {
+                  width: '100vw',
+                  height: '100vh',
+                  background: '#000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }
+              : {
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  aspectRatio: `${currentWidth} / ${currentHeight}`,
+                }
+          }
         >
           <div
-            style={isFullscreen ? {
-              width: '100%',
-              height: '100%',
-              maxWidth: '100%',
-              maxHeight: '100%',
-              aspectRatio: `${currentWidth} / ${currentHeight}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            } : {
-              width: '100%',
-              height: '100%'
-            }}
+            style={
+              isFullscreen
+                ? {
+                    width: '100%',
+                    height: '100%',
+                    aspectRatio: `${currentWidth} / ${currentHeight}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }
+                : { width: '100%', height: '100%' }
+            }
           >
-            <canvas
-              ref={canvasRef}
-              className="w-full h-full object-contain bg-black"
-            />
+            <canvas ref={canvasRef} className="w-full h-full object-contain bg-black" />
           </div>
         </div>
       </div>

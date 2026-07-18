@@ -7,7 +7,7 @@ type AppId = 'launcher' | 'cf' | 'nc';
 
 /**
  * Shell launcher — pick a frontend that runs on the shared stdlib host.
- * CF App  → @agapi/cf-loader
+ * CF App  → @agapi/cf-runtime
  * NC App  → plain React + @agapi/stdlib net/dgram (no CF)
  */
 export default function App() {
@@ -56,7 +56,7 @@ export default function App() {
                   systems.
                 </p>
                 <p className="text-xs text-blue-400/80 mt-2 font-mono">
-                  @agapi/cf-loader
+                  @agapi/cf-runtime
                 </p>
               </div>
             </div>

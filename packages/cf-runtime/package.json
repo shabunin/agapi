@@ -1,5 +1,5 @@
 {
-  "name": "@agapi/cf-loader",
+  "name": "@agapi/cf-runtime",
   "version": "0.0.1",
   "private": true,
   "type": "module",

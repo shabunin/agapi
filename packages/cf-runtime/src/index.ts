@@ -1,5 +1,5 @@
 /**
- * @agapi/cf-loader — CommandFusion / iViewer GUI runtime.
+ * @agapi/cf-runtime — CommandFusion / iViewer GUI runtime.
  *
  * Depends on @agapi/stdlib (net/dgram/http). Host must call installStdlib()
  * before loadProject() if systems need real sockets.

@@ -22,7 +22,7 @@
     "release": "tsx scripts/release.ts"
   },
   "dependencies": {
-    "@agapi/cf-loader": "0.0.1",
+    "@agapi/cf-runtime": "0.0.1",
     "@agapi/host-protocol": "0.0.1",
     "@agapi/host-tauri": "0.0.1",
     "@agapi/stdlib": "0.0.1",

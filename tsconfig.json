@@ -35,11 +35,11 @@
       "@agapi/host-tauri/*": [
         "packages/host-tauri/src/*"
       ],
-      "@agapi/cf-loader": [
-        "packages/cf-loader/src/index.ts"
+      "@agapi/cf-runtime": [
+        "packages/cf-runtime/src/index.ts"
       ],
-      "@agapi/cf-loader/*": [
-        "packages/cf-loader/src/*"
+      "@agapi/cf-runtime/*": [
+        "packages/cf-runtime/src/*"
       ]
     },
     "allowImportingTsExtensions": true,
