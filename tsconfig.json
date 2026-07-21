@@ -48,7 +48,9 @@
   "exclude": [
     "node_modules",
     "dist",
+    "demos",
     "src-tauri/target",
-    "docs-for-agent"
+    "docs-for-agent",
+    "docs-iViewer-JavaScript-API"
   ]
 }

@@ -1,6 +1,9 @@
 /**
  * Shell-only helpers: load CF project assets from browser File or native path.
  * Runtime lives in @agapi/cf-runtime (loadProject) — not here.
+ *
+ * Scripts: only files listed in <scripts><script name="..."/> of the .gui
+ * are loaded (paths may point into subfolders, e.g. scripts/foo.js).
  */
 import JSZip from 'jszip';
 
@@ -10,6 +13,36 @@ export interface ProjectAssets {
   scriptMap: Record<string, string>;
   /** blob: URLs that the shell must revoke later */
   blobUrls: string[];
+}
+
+/** Parse <script name="..."> entries from gui XML (order preserved). */
+export function extractScriptNamesFromGui(guiXml: string): string[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(guiXml, 'application/xml');
+  const names: string[] = [];
+  const nodes = doc.querySelectorAll('gui > scripts > script, scripts > script');
+  nodes.forEach((el) => {
+    const name = el.getAttribute('name')?.trim();
+    if (name) names.push(name);
+  });
+  return names;
+}
+
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
+/** Match a listed script name against a file path (zip entry or relative path). */
+function pathMatchesScript(filePath: string, scriptName: string): boolean {
+  const key = normalizePath(filePath).toLowerCase();
+  const want = normalizePath(scriptName).toLowerCase();
+  const leaf = want.split('/').pop() || want;
+  return (
+    key === want ||
+    key.endsWith('/' + want) ||
+    key === leaf ||
+    key.endsWith('/' + leaf)
+  );
 }
 
 /** Unpack a browser File (.gui.zip) via JSZip. */
@@ -24,12 +57,12 @@ async function unpackZip(
 ): Promise<ProjectAssets> {
   let guiXml = '';
   const imageMap: Record<string, string> = {};
-  const scriptMap: Record<string, string> = {};
   const blobUrls: string[] = [];
 
+  // First pass: gui + images only (not all .js)
   for (const [path, zipEntry] of Object.entries(zip.files)) {
     if (zipEntry.dir) continue;
-    const filename = path.split('/').pop() || '';
+    const filename = path.split(/[/\\]/).pop() || '';
 
     if (filename.toLowerCase().endsWith('.gui')) {
       guiXml = await zipEntry.async('string');
@@ -47,13 +80,34 @@ async function unpackZip(
         imageMap[filename] = blobUrl;
         blobUrls.push(blobUrl);
       }
-    } else if (filename.toLowerCase().endsWith('.js')) {
-      scriptMap[path] = await zipEntry.async('string');
     }
   }
 
   if (!guiXml) throw new Error('No .gui file found in the zip archive.');
+
+  const scriptMap = await loadScriptsFromZip(zip, extractScriptNamesFromGui(guiXml));
   return { guiXml, imageMap, scriptMap, blobUrls };
+}
+
+async function loadScriptsFromZip(
+  zip: JSZip,
+  scriptNames: string[]
+): Promise<Record<string, string>> {
+  const scriptMap: Record<string, string> = {};
+  const entries = Object.entries(zip.files).filter(([, e]) => !e.dir);
+
+  for (const name of scriptNames) {
+    const hit = entries.find(([path]) => pathMatchesScript(path, name));
+    if (!hit) {
+      console.warn(`[openProject] script listed in .gui but not found in zip: ${name}`);
+      continue;
+    }
+    const [, zipEntry] = hit;
+    // Key by the name from .gui so loadProject matching is exact
+    scriptMap[name] = await zipEntry.async('string');
+  }
+
+  return scriptMap;
 }
 
 /** Open .gui / .gui.zip via Tauri dialog + fs plugins. */
@@ -93,24 +147,75 @@ export async function openProjectNative(): Promise<ProjectAssets | null> {
   if (selectedPath.toLowerCase().endsWith('.gui')) {
     const guiXml = await readTextFile(selectedPath);
     const dir = await dirname(selectedPath);
-    const entries = await readDir(dir);
     const imageMap: Record<string, string> = {};
-    const scriptMap: Record<string, string> = {};
 
+    // Images: still scan project root (and one level of common image folders is enough later)
+    const entries = await readDir(dir);
     for (const entry of entries) {
       if (!entry.isFile) continue;
       if (/\.(png|jpe?g|gif|webp|svg)$/i.test(entry.name)) {
         imageMap[entry.name] = convertFileSrc(await join(dir, entry.name));
-      } else if (entry.name.toLowerCase().endsWith('.js')) {
-        scriptMap[entry.name] = await readTextFile(await join(dir, entry.name));
       }
     }
+
+    const scriptNames = extractScriptNamesFromGui(guiXml);
+    const scriptMap = await loadScriptsFromNativeDir(dir, scriptNames, {
+      readTextFile,
+      join,
+    });
 
     if (!guiXml) throw new Error('No .gui file found.');
     return { guiXml, imageMap, scriptMap, blobUrls: [] };
   }
 
   throw new Error('Unsupported file type (expected .gui or .zip).');
+}
+
+/**
+ * Load only script names from the .gui, resolving relative paths under projectDir
+ * (e.g. "scripts/upnp_from0.js" → projectDir/scripts/upnp_from0.js).
+ */
+async function loadScriptsFromNativeDir(
+  projectDir: string,
+  scriptNames: string[],
+  fs: {
+    readTextFile: (path: string) => Promise<string>;
+    join: (...parts: string[]) => Promise<string>;
+  }
+): Promise<Record<string, string>> {
+  const scriptMap: Record<string, string> = {};
+
+  for (const name of scriptNames) {
+    const rel = normalizePath(name);
+    // join each path segment so nested scripts/foo/bar.js works
+    const segments = rel.split('/').filter(Boolean);
+    let fullPath = projectDir;
+    for (const seg of segments) {
+      fullPath = await fs.join(fullPath, seg);
+    }
+
+    try {
+      scriptMap[name] = await fs.readTextFile(fullPath);
+    } catch (e) {
+      // Fallback: try leaf name in project root (some projects list "foo.js" but file is nested)
+      const leaf = segments[segments.length - 1];
+      if (leaf && leaf !== rel) {
+        try {
+          const leafPath = await fs.join(projectDir, leaf);
+          scriptMap[name] = await fs.readTextFile(leafPath);
+          console.warn(
+            `[openProject] script "${name}" not at relative path; loaded from root as "${leaf}"`
+          );
+          continue;
+        } catch {
+          /* fall through */
+        }
+      }
+      console.warn(`[openProject] script listed in .gui but not found on disk: ${name}`, e);
+    }
+  }
+
+  return scriptMap;
 }
 
 export function revokeBlobUrls(urls: string[]) {
