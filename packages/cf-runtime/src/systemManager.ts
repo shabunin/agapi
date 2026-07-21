@@ -492,26 +492,7 @@ export class ControlSystem {
             if (!regexStr) continue;
 
             try {
-                // Translate CF inline flags (?i)(?s)(?m) → JS RegExp flags.
-                //
-                // ROOT CAUSE (UPnP ANSWER_BCAST regex="(.*)"):
-                // In JavaScript, '.' does NOT match newlines unless the 's' (dotAll) flag
-                // is set. So /(.*)/.exec(ssdpPacket) returns only the first line
-                // ("HTTP/1.1 200 OK"), and if the payload starts with \r\n/\n it returns "".
-                // iViewer/CF designers write (.*) expecting the *whole* multi-line message
-                // (including LOCATION:). We enable dotAll by default for feedback regexes.
-                const isCaseInsensitive = /\(\?[^)]*i/.test(regexStr);
-                const wantsDotAll = true; // CF feedback default — see comment above
-                const isMultilineAnchors = /\(\?[^)]*m/.test(regexStr);
-                const cleanRegex = regexStr.replace(/\(\?[ims]+\)/g, '');
-                let flags = '';
-                if (isCaseInsensitive) flags += 'i';
-                if (wantsDotAll) flags += 's';
-                if (isMultilineAnchors) flags += 'm';
-
-                const parser = new RegExp(cleanRegex, flags);
-                const match = parser.exec(message);
-
+                const match = this._execFeedbackRegex(regexStr, message);
                 if (match) {
                     const fbName = fb.attributes['name'] || '';
                     // Dispatch includes system name for watch() filtering
@@ -542,6 +523,57 @@ export class ControlSystem {
                 console.error(`[System ${this.name}] Invalid regex "${regexStr}":`, e);
             }
         }
+    }
+
+    /**
+     * Run a CF GUI Designer feedback regex against one message (packet / EOM frame).
+     *
+     * CF designers write patterns like `(.*)` or `(.*?)` expecting the *entire*
+     * multi-line message (SSDP, HTTP-ish payloads). Two JS footguns break that:
+     *
+     * 1. Without the `s` (dotAll) flag, `.` does not match `\n` — greedy `(.*)`
+     *    only captures the first line.
+     * 2. Non-greedy `(.*?)` matches the empty string at index 0 of ANY input
+     *    (`/(.*?)/s.exec("HTTP...")[0] === ""`). That is exactly UPnP_test.gui
+     *    ANSWER_BCAST (`regex="(.*?)"`) → FeedbackMatched with "" → script crash.
+     *
+     * Catch-all patterns are therefore treated as "whole message matches".
+     */
+    private _execFeedbackRegex(regexStr: string, message: string): RegExpExecArray | null {
+        const isCaseInsensitive = /\(\?[^)]*i/.test(regexStr);
+        const isMultilineAnchors = /\(\?[^)]*m/.test(regexStr);
+        // Strip CF-style inline flags; JS uses the flags argument instead.
+        let cleanRegex = regexStr.replace(/\(\?[ims]+\)/g, '');
+
+        // Whole-message catch-alls used all over CF projects (UPnP, raw TCP, …)
+        const catchAll =
+            /^\(\.\*\??\)$/.test(cleanRegex) ||
+            /^\.\*\??$/.test(cleanRegex) ||
+            /^\(\[\\s\\S\]\*\??\)$/.test(cleanRegex);
+
+        if (catchAll) {
+            // Synthesize a match as if the pattern consumed the whole message.
+            // Group 1 (if pattern had a capturing group) = full message too.
+            const hasGroup = cleanRegex.startsWith('(');
+            const arr = (hasGroup ? [message, message] : [message]) as unknown as RegExpExecArray;
+            arr.index = 0;
+            arr.input = message;
+            arr.groups = undefined;
+            return message.length === 0 ? null : arr;
+        }
+
+        let flags = 's'; // default dotAll — multi-line CF feedback packets
+        if (isCaseInsensitive) flags += 'i';
+        if (isMultilineAnchors) flags += 'm';
+
+        const parser = new RegExp(cleanRegex, flags);
+        const match = parser.exec(message);
+        // If a non-catch-all pattern produces a zero-length match on non-empty
+        // input, it is almost always non-greedy nonsense — treat as no match.
+        if (match && match[0] === '' && message.length > 0) {
+            return null;
+        }
+        return match;
     }
 
     private _processFeedbackItem(item: CFNode, match: RegExpExecArray, tokens: Record<string, string>) {
