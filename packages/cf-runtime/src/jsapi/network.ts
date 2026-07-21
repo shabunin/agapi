@@ -61,7 +61,8 @@ export function request(
                 });
                 
                 req.on('error', (err) => {
-                    console.error("Tauri request failed", err);
+                    const detail = (err && ((err as any).message || String(err))) || 'unknown';
+                    console.error("Tauri request failed:", detail, err);
                     if (callback) callback(0, {}, "Request failed");
                 });
                 

@@ -48,7 +48,7 @@ pub async fn http_client_request(
     let response = match request_builder.send().await {
         Ok(res) => res,
         Err(e) => {
-            // Surface TLS/connect details for debugging CF.request failures
+            // Surface full error chain (TLS / mTLS / connect) for CF.request debugging
             let mut msg = e.to_string();
             if e.is_connect() {
                 msg = format!("connect error: {}", msg);
@@ -59,9 +59,15 @@ pub async fn http_client_request(
             if e.is_request() {
                 msg = format!("request error: {}", msg);
             }
-            // Common case: certificate / hostname
-            if let Some(source) = std::error::Error::source(&e) {
-                msg = format!("{} ({})", msg, source);
+            let mut src = std::error::Error::source(&e);
+            let mut depth = 0;
+            while let Some(s) = src {
+                msg = format!("{} ({})", msg, s);
+                src = s.source();
+                depth += 1;
+                if depth > 6 {
+                    break;
+                }
             }
             return Err(msg);
         }
