@@ -72,9 +72,17 @@ export default function CfApp({ onBack }: CfAppProps) {
           case 'open_browser':
             fileInputRef.current?.click();
             break;
-          case 'reload':
-            window.location.reload();
+          case 'reload': {
+            // Stop Rust-backed sockets before webview reload — process stays alive.
+            const cf = (window as any).CF;
+            try {
+              cf?.stopSystems?.();
+            } catch (e) {
+              console.warn('stopSystems before reload:', e);
+            }
+            setTimeout(() => window.location.reload(), 150);
             break;
+          }
           case 'devtools':
             import('@tauri-apps/api/core').then((core) => {
               core.invoke('is_devtools_open').then((isOpen) => {
@@ -131,7 +139,22 @@ export default function CfApp({ onBack }: CfAppProps) {
   }, [projectLoaded, project, orientation]);
 
   useEffect(() => {
+    const stopNetwork = () => {
+      try {
+        (window as any).CF?.stopSystems?.();
+      } catch {
+        /* ignore */
+      }
+    };
+    // Full page reload / navigate away — JS dies but Tauri process keeps OS sockets
+    // unless we close them first.
+    window.addEventListener('pagehide', stopNetwork);
+    window.addEventListener('beforeunload', stopNetwork);
+
     return () => {
+      window.removeEventListener('pagehide', stopNetwork);
+      window.removeEventListener('beforeunload', stopNetwork);
+      stopNetwork();
       gsap.globalTimeline.clear();
       if (rendererRef.current) rendererRef.current.destroy();
       else if (appRef.current) {

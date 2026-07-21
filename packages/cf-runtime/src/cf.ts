@@ -235,6 +235,28 @@ export class CFAPI implements CFContext {
         }
     }
 
+    /**
+     * Close all TCP/UDP/server sockets owned by this CF instance.
+     * Must run before project reload or page reload — Rust sockets outlive JS
+     * if we only tear down the webview (window.location.reload).
+     */
+    stopSystems() {
+        const seen = new Set<any>();
+        for (const name in this.controlSystems) {
+            const sys = this.controlSystems[name];
+            if (!sys || seen.has(sys)) continue;
+            seen.add(sys);
+            try {
+                // stop() sets enabled=false and closes sockets
+                sys.stop();
+            } catch (e) {
+                console.warn(`[CF] stopSystems(${name}):`, e);
+            }
+        }
+        this.controlSystems = {};
+        this.systems = {};
+    }
+
     public dispatchEvent(eventName: string, ...args: any[]) {
         if (eventName === this.ListDidScrollEvent && args.length >= 5) {
             const [listJoin, count, first, numVisible, scrollPosition] = args;

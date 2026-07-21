@@ -181,6 +181,7 @@ export class ControlSystem {
 
     public stop() {
         this.enabled = false;
+        this.autoReconnect = false;
         this._stopHeartbeat();
 
         if (this.isLoopback) {
@@ -192,17 +193,39 @@ export class ControlSystem {
         }
 
         if (this.tcpSocket) {
-            this.tcpSocket.destroy();
+            try {
+                this.tcpSocket.destroy();
+            } catch (e) {
+                console.warn(`[System ${this.name}] tcp destroy:`, e);
+            }
             this.tcpSocket = undefined;
         }
         if (this.udpSocket) {
-            this.udpSocket.close();
+            try {
+                // drop multicast before close when possible
+                if (this._isMulticastAddress(this.address) && this.udpSocket.dropMembership) {
+                    try {
+                        this.udpSocket.dropMembership(this.address);
+                    } catch {
+                        /* ignore */
+                    }
+                }
+                this.udpSocket.close();
+            } catch (e) {
+                console.warn(`[System ${this.name}] udp close:`, e);
+            }
             this.udpSocket = undefined;
         }
         if (this.tcpServer) {
-            this.tcpServer.close();
+            try {
+                this.tcpServer.closeAllConnections?.();
+                this.tcpServer.close();
+            } catch (e) {
+                console.warn(`[System ${this.name}] tcp server close:`, e);
+            }
             this.tcpServer = undefined;
         }
+        this.connections = [];
     }
 
     // ──────────────────────────────────────────────────────────────

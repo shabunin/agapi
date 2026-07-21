@@ -46,6 +46,19 @@ export async function loadProject(options: LoadProjectOptions): Promise<LoadProj
     onOrientationChange,
   } = options;
 
+  // Tear down previous CF systems FIRST — otherwise reload leaves Rust sockets
+  // bound (EADDRINUSE on origin ports) while a new CFAPI starts another set.
+  const prevCf = (typeof window !== 'undefined' ? (window as any).CF : null) as
+    | { stopSystems?: () => void }
+    | null;
+  if (prevCf && typeof prevCf.stopSystems === 'function') {
+    try {
+      prevCf.stopSystems();
+    } catch (e) {
+      console.warn('[loadProject] prev CF.stopSystems failed:', e);
+    }
+  }
+
   const project = await parseGUI(guiXml);
 
   gsap.globalTimeline.clear();
