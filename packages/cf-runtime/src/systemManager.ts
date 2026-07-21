@@ -445,6 +445,7 @@ export class ControlSystem {
 
     private _processBuffer() {
         if (!this.eom) {
+            // Per-datagram (UDP) or stream chunk with no EOM: process whole buffer once
             if (this.buffer.length > 0) {
                 this._matchFeedbacks(this.buffer);
                 this.buffer = '';
@@ -456,11 +457,17 @@ export class ControlSystem {
         while ((eomIndex = this.buffer.indexOf(this.eom)) !== -1) {
             const message = this.buffer.substring(0, eomIndex);
             this.buffer = this.buffer.substring(eomIndex + this.eom.length);
+            // Skip empty frames between consecutive EOMs (e.g. "\r\n\r\n")
+            if (message.length === 0) continue;
             this._matchFeedbacks(message);
         }
     }
 
     private _matchFeedbacks(message: string) {
+        // Never run catch-all regexes like (.*) against empty input —
+        // JS /(.*)/.exec("") => [""] which fires FeedbackMatched with "".
+        if (message == null || message.length === 0) return;
+
         for (const fb of this.feedbackRules) {
             const regexStr = fb.attributes['regex'];
             if (!regexStr) continue;
@@ -476,7 +483,9 @@ export class ControlSystem {
                 const parser = new RegExp(cleanRegex, flags);
                 const match = parser.exec(message);
 
-                if (match) {
+                // Require a non-empty full match. Patterns like (.*) match "" on empty
+                // input; also reject zero-length matches from other degenerate patterns.
+                if (match && match[0] != null && match[0].length > 0) {
                     const fbName = fb.attributes['name'] || '';
                     // Dispatch includes system name for watch() filtering
                     this.cfApi.dispatchEvent(this.cfApi.FeedbackMatchedEvent, this.name, fbName, match[0]);

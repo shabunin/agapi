@@ -606,7 +606,33 @@ export class CFAPI implements CFContext {
 
     unwatch = (event: string, ...args: any[]) => {
         if (!this.watchers[event]) return;
-        
+
+        // FeedbackMatched form (same as watch):
+        //   CF.unwatch(FeedbackMatchedEvent, systemName, feedbackName [, callback])
+        if (
+            event === this.FeedbackMatchedEvent &&
+            args.length >= 2 &&
+            typeof args[0] === 'string' &&
+            typeof args[1] === 'string'
+        ) {
+            const systemName = args[0];
+            const feedbackName = args[1];
+            const callback = typeof args[2] === 'function' ? args[2] : undefined;
+            this.watchers[event] = this.watchers[event].filter((w) => {
+                if (w.systemName && w.systemName !== systemName) return true;
+                if (w.feedbackName && w.feedbackName !== feedbackName) return true;
+                if (callback && w.callback !== callback) return true;
+                // system+feedback (+optional cb) match → remove
+                if (!w.systemName && !w.feedbackName) {
+                    // bare FeedbackMatched watcher: only remove if no system filter requested
+                    // keep bare watchers when unwatching a specific system/item
+                    return true;
+                }
+                return false;
+            });
+            return;
+        }
+
         let callback: Function | undefined;
         let joins: string[] | string | undefined;
 
@@ -630,8 +656,8 @@ export class CFAPI implements CFContext {
         this.watchers[event] = this.watchers[event].filter(w => {
             // If callback provided, only consider matching watchers for removal
             if (callback && w.callback !== callback) return true;
-            
-            // If we are here, callback matched (or wasn't provided). 
+
+            // If we are here, callback matched (or wasn't provided).
             // If no specific joins were requested to be removed, remove this watcher entirely.
             if (!joinsToRemove) return false;
 
