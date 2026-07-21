@@ -528,22 +528,37 @@ export class ControlSystem {
     /**
      * Run a CF GUI Designer feedback regex against one message (packet / EOM frame).
      *
-     * CF designers write patterns like `(.*)` or `(.*?)` expecting the *entire*
-     * multi-line message (SSDP, HTTP-ish payloads). Two JS footguns break that:
+     * CF Designer's inline-flag syntax is a *leading* modifier group — e.g.
+     * `(?ims)lastpage=(.*)` (see real .gui feedback patterns). It must be
+     * matched precisely: scanning loosely for "a paren group containing the
+     * letter i/m anywhere" (the previous approach) false-positives on ordinary
+     * non-capturing groups like `(?:info)` or `(?:room)`, silently changing
+     * matching behaviour for patterns that were never meant to carry flags.
+     *
+     * CF designers also write patterns like `(.*)` or `(.*?)` expecting the
+     * *entire* multi-line message (SSDP, HTTP-ish payloads). Two JS footguns
+     * break that:
      *
      * 1. Without the `s` (dotAll) flag, `.` does not match `\n` — greedy `(.*)`
-     *    only captures the first line.
+     *    only captures the first line. CF feedback data has no real notion of
+     *    "lines", so dotAll is applied by default here.
      * 2. Non-greedy `(.*?)` matches the empty string at index 0 of ANY input
-     *    (`/(.*?)/s.exec("HTTP...")[0] === ""`). That is exactly UPnP_test.gui
-     *    ANSWER_BCAST (`regex="(.*?)"`) → FeedbackMatched with "" → script crash.
+     *    (`/(.*?)/s.exec("HTTP...")[0] === ""`) in every PCRE-compatible regex
+     *    engine, including ICU — that pattern is arguably a typo in whatever
+     *    authored the .gui, but we still need to run existing/third-party
+     *    projects as shipped. That is exactly UPnP_test.gui ANSWER_BCAST
+     *    (`regex="(.*?)"`) → FeedbackMatched with "" → script crash.
      *
      * Catch-all patterns are therefore treated as "whole message matches".
      */
     private _execFeedbackRegex(regexStr: string, message: string): RegExpExecArray | null {
-        const isCaseInsensitive = /\(\?[^)]*i/.test(regexStr);
-        const isMultilineAnchors = /\(\?[^)]*m/.test(regexStr);
-        // Strip CF-style inline flags; JS uses the flags argument instead.
-        let cleanRegex = regexStr.replace(/\(\?[ims]+\)/g, '');
+        // Only a pure-letters modifier group at the very start of the pattern
+        // counts as CF inline flags — never a mid-pattern or non-capturing group.
+        const flagMatch = regexStr.match(/^\(\?([a-zA-Z]+)\)/);
+        const flagLetters = flagMatch ? flagMatch[1].toLowerCase() : '';
+        const isCaseInsensitive = flagLetters.includes('i');
+        const isMultilineAnchors = flagLetters.includes('m');
+        const cleanRegex = flagMatch ? regexStr.slice(flagMatch[0].length) : regexStr;
 
         // Whole-message catch-alls used all over CF projects (UPnP, raw TCP, …)
         const catchAll =
