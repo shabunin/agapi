@@ -159,6 +159,10 @@ export const Buffer = {
     if (Array.isArray(data)) {
       return wrap(Uint8Array.from(data));
     }
+    // Array-like objects (some IPC bridges deliver number sequences this way)
+    if (data && typeof data === 'object' && typeof (data as any).length === 'number') {
+      return wrap(Uint8Array.from(data as ArrayLike<number>));
+    }
     return wrap(new Uint8Array(0));
   },
 

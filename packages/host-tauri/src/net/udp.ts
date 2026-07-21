@@ -102,13 +102,15 @@ export class TauriUdpSocket extends EventEmitter {
             recvBufferSize: this.options.recvBufferSize || null,
             sendBufferSize: this.options.sendBufferSize || null
         })
-            .then(result => {
+            .then(async (result) => {
                 this.socketId = result.id;
                 this.localAddress = result.local_address;
                 this.localPort = result.local_port;
                 this.localFamily = result.family;
 
-                this.setupListener();
+                // Must attach Tauri event listener BEFORE advertising 'listening',
+                // otherwise early datagrams (SSDP replies) are dropped.
+                await this.setupListener();
 
                 // Fetch buffer sizes to fill cache
                 invoke<number>('udp_get_recv_buffer_size', { id: this.socketId })

@@ -329,7 +329,7 @@ export class ControlSystem {
             this.cfApi.dispatchEvent(this.cfApi.ConnectionStatusChangeEvent, this.name, true, remote);
 
             clientSocket.on('data', (data: Uint8Array | string) => {
-                const str = typeof data === 'string' ? data : new TextDecoder('utf-8').decode(data);
+                const str = this._bytesToString(data);
                 this.buffer += str;
                 this._processBuffer();
             });
@@ -359,7 +359,10 @@ export class ControlSystem {
         const bindPort = this.localPort > 0 ? this.localPort : 0;
 
         this.udpSocket.on('message', (msg: Uint8Array | string, rinfo: any) => {
-            const str = typeof msg === 'string' ? msg : new TextDecoder('utf-8').decode(msg);
+            // Prefer binary/latin1 decode: each byte → char (CF BINARY style).
+            // UTF-8 is wrong for raw SSDP/control if we ever get non-ASCII; ASCII SSDP
+            // is fine either way. Using latin1 avoids TextDecoder edge cases on views.
+            const str = this._bytesToString(msg);
             this.buffer += str;
             this._processBuffer();
         });
@@ -406,6 +409,29 @@ export class ControlSystem {
         return a >= 224 && a <= 239;
     }
 
+    /** Decode socket payload to a JS string for feedback matching. */
+    private _bytesToString(msg: unknown): string {
+        if (typeof msg === 'string') return msg;
+        let u8: Uint8Array;
+        if (msg instanceof Uint8Array) {
+            u8 = msg;
+        } else if (ArrayBuffer.isView(msg)) {
+            const v = msg as ArrayBufferView;
+            u8 = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+        } else if (Array.isArray(msg)) {
+            u8 = Uint8Array.from(msg as number[]);
+        } else if (msg && typeof msg === 'object' && typeof (msg as any).length === 'number') {
+            u8 = Uint8Array.from(msg as ArrayLike<number>);
+        } else {
+            console.warn(`[System ${this.name}] unexpected message type:`, typeof msg, msg);
+            return '';
+        }
+        // Latin-1: 1:1 byte↔char (matches CF BINARY semantics for regex matching)
+        let s = '';
+        for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+        return s;
+    }
+
     // ──────────────────────────────────────────────────────────────
     // Heartbeat
     // ──────────────────────────────────────────────────────────────
@@ -445,7 +471,6 @@ export class ControlSystem {
 
     private _processBuffer() {
         if (!this.eom) {
-            // Per-datagram (UDP) or stream chunk with no EOM: process whole buffer once
             if (this.buffer.length > 0) {
                 this._matchFeedbacks(this.buffer);
                 this.buffer = '';
@@ -457,35 +482,37 @@ export class ControlSystem {
         while ((eomIndex = this.buffer.indexOf(this.eom)) !== -1) {
             const message = this.buffer.substring(0, eomIndex);
             this.buffer = this.buffer.substring(eomIndex + this.eom.length);
-            // Skip empty frames between consecutive EOMs (e.g. "\r\n\r\n")
-            if (message.length === 0) continue;
             this._matchFeedbacks(message);
         }
     }
 
     private _matchFeedbacks(message: string) {
-        // Never run catch-all regexes like (.*) against empty input —
-        // JS /(.*)/.exec("") => [""] which fires FeedbackMatched with "".
-        if (message == null || message.length === 0) return;
-
         for (const fb of this.feedbackRules) {
             const regexStr = fb.attributes['regex'];
             if (!regexStr) continue;
 
             try {
-                const isCaseInsensitive = regexStr.includes('(?i)');
-                const isMultiline = regexStr.includes('(?s)') || regexStr.includes('(?m)');
-                let cleanRegex = regexStr.replace(/\(\?[a-z]+\)/g, '');
+                // Translate CF inline flags (?i)(?s)(?m) → JS RegExp flags.
+                //
+                // ROOT CAUSE (UPnP ANSWER_BCAST regex="(.*)"):
+                // In JavaScript, '.' does NOT match newlines unless the 's' (dotAll) flag
+                // is set. So /(.*)/.exec(ssdpPacket) returns only the first line
+                // ("HTTP/1.1 200 OK"), and if the payload starts with \r\n/\n it returns "".
+                // iViewer/CF designers write (.*) expecting the *whole* multi-line message
+                // (including LOCATION:). We enable dotAll by default for feedback regexes.
+                const isCaseInsensitive = /\(\?[^)]*i/.test(regexStr);
+                const wantsDotAll = true; // CF feedback default — see comment above
+                const isMultilineAnchors = /\(\?[^)]*m/.test(regexStr);
+                const cleanRegex = regexStr.replace(/\(\?[ims]+\)/g, '');
                 let flags = '';
                 if (isCaseInsensitive) flags += 'i';
-                if (isMultiline) flags += 's';
+                if (wantsDotAll) flags += 's';
+                if (isMultilineAnchors) flags += 'm';
 
                 const parser = new RegExp(cleanRegex, flags);
                 const match = parser.exec(message);
 
-                // Require a non-empty full match. Patterns like (.*) match "" on empty
-                // input; also reject zero-length matches from other degenerate patterns.
-                if (match && match[0] != null && match[0].length > 0) {
+                if (match) {
                     const fbName = fb.attributes['name'] || '';
                     // Dispatch includes system name for watch() filtering
                     this.cfApi.dispatchEvent(this.cfApi.FeedbackMatchedEvent, this.name, fbName, match[0]);
