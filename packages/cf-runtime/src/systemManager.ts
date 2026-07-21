@@ -163,12 +163,18 @@ export class ControlSystem {
 
         if (this.isLoopback) {
             this._startLoopback();
+            return;
+        }
+
+        // Protocol wins over accept: UDP systems with accept=1 are still UDP
+        // (bind localPort / join multicast). accept=1 only means TCP *listen*
+        // for tcp/cf systems — never open a TCP server for protocol="udp".
+        if (this.type === 'udp') {
+            this._startUdp();
         } else if (this.accept) {
             this._startTcpServer();
-        } else if (this.type === 'udp') {
-            this._startUdp();
         } else {
-            // tcp or cf
+            // tcp or cf client
             this._connectTcp();
         }
     }
@@ -325,15 +331,9 @@ export class ControlSystem {
     // ──────────────────────────────────────────────────────────────
 
     private _startUdp() {
-        this.udpSocket = dgram.createSocket('udp4');
+        // reuseAddr helps SSDP / reload when previous socket is slow to release
+        this.udpSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true } as any);
         const bindPort = this.localPort > 0 ? this.localPort : 0;
-
-        this.udpSocket.bind(bindPort, undefined, () => {
-            const remote = `${this.address}:${this.port}`;
-            if (!this.connections.includes(remote)) this.connections.push(remote);
-
-            this.cfApi.dispatchEvent(this.cfApi.ConnectionStatusChangeEvent, this.name, true, remote);
-        });
 
         this.udpSocket.on('message', (msg: Uint8Array | string, rinfo: any) => {
             const str = typeof msg === 'string' ? msg : new TextDecoder('utf-8').decode(msg);
@@ -349,6 +349,38 @@ export class ControlSystem {
         this.udpSocket.on('error', (err: any) => {
             console.warn(`[System ${this.name}] UDP error:`, err);
         });
+
+        this.udpSocket.bind(bindPort, '0.0.0.0', () => {
+            try {
+                // Multicast SSDP etc. (e.g. 239.255.255.250)
+                if (this._isMulticastAddress(this.address) && this.udpSocket?.addMembership) {
+                    this.udpSocket.addMembership(this.address);
+                    console.log(
+                        `[System ${this.name}] UDP bound :${bindPort || 'ephemeral'}, joined multicast ${this.address}`
+                    );
+                } else {
+                    console.log(`[System ${this.name}] UDP bound :${bindPort || 'ephemeral'}`);
+                }
+                if (this.accept && this.udpSocket?.setBroadcast) {
+                    // acceptBroadcasts-style systems often need broadcast
+                    this.udpSocket.setBroadcast(true);
+                }
+            } catch (e) {
+                console.warn(`[System ${this.name}] UDP post-bind setup:`, e);
+            }
+
+            const remote = `${this.address}:${this.port}`;
+            if (!this.connections.includes(remote)) this.connections.push(remote);
+
+            this.cfApi.dispatchEvent(this.cfApi.ConnectionStatusChangeEvent, this.name, true, remote);
+        });
+    }
+
+    private _isMulticastAddress(ip: string): boolean {
+        const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(ip);
+        if (!m) return false;
+        const a = parseInt(m[1], 10);
+        return a >= 224 && a <= 239;
     }
 
     // ──────────────────────────────────────────────────────────────
