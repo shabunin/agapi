@@ -7,6 +7,7 @@ import {
   joinStore,
   type CFProject,
   type CFRenderer,
+  type RuntimeMenu,
 } from '@agapi/cf-runtime';
 import {
   openProjectFromZipFile,
@@ -31,17 +32,30 @@ export default function CfApp({ onBack }: CfAppProps) {
   const [error, setError] = useState<string | null>(null);
   const [projectLoaded, setProjectLoaded] = useState(false);
   const [project, setProject] = useState<CFProject | null>(null);
+  /** Runtime chrome bar; outline/orientation live in the menu itself. */
+  const [showMenu, setShowMenu] = useState(true);
   const [debugMode, setDebugMode] = useState(false);
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  /** Canvas box only — GUI surface / fullscreen target (no chrome). */
   const containerRef = useRef<HTMLDivElement>(null);
+  /** Dedicated strip above the canvas for RuntimeMenu (no GUI overlap). */
+  const chromeRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appRef = useRef<Application | null>(null);
   const rendererRef = useRef<CFRenderer | null>(null);
+  const menuRef = useRef<RuntimeMenu | null>(null);
   const blobUrlsRef = useRef<string[]>([]);
   const scriptElementsRef = useRef<HTMLScriptElement[]>([]);
+
+  /** Stable host hooks for RuntimeMenu (avoids stale closures). */
+  const hostActionsRef = useRef({
+    openNative: async () => {},
+    openZip: () => {},
+    toggleDevtools: async () => {},
+  });
 
   const cleanupAssets = useCallback(() => {
     revokeBlobUrls(blobUrlsRef.current);
@@ -55,63 +69,6 @@ export default function CfApp({ onBack }: CfAppProps) {
       }
     });
     scriptElementsRef.current = [];
-  }, []);
-
-  const actionsRef = useRef({ handleNativeOpen: () => {}, toggleFullscreen: () => {} });
-
-  useEffect(() => {
-    let unmounted = false;
-    let unlistenFn: (() => void) | undefined;
-    import('@tauri-apps/api/event').then((api) => {
-      api.listen('menu-action', (event) => {
-        const action = event.payload as string;
-        switch (action) {
-          case 'open_native':
-            actionsRef.current.handleNativeOpen();
-            break;
-          case 'open_browser':
-            fileInputRef.current?.click();
-            break;
-          case 'reload': {
-            // Stop Rust-backed sockets before webview reload — process stays alive.
-            const cf = (window as any).CF;
-            try {
-              cf?.stopSystems?.();
-            } catch (e) {
-              console.warn('stopSystems before reload:', e);
-            }
-            setTimeout(() => window.location.reload(), 150);
-            break;
-          }
-          case 'devtools':
-            import('@tauri-apps/api/core').then((core) => {
-              core.invoke('is_devtools_open').then((isOpen) => {
-                core.invoke('set_devtools', { open: !isOpen });
-              });
-            });
-            break;
-          case 'outline':
-            setDebugMode((prev) => !prev);
-            break;
-          case 'fullscreen':
-            actionsRef.current.toggleFullscreen();
-            break;
-          case 'landscape':
-            setOrientation('landscape');
-            break;
-          case 'portrait':
-            setOrientation('portrait');
-            break;
-        }
-      }).then((u) => {
-        if (unmounted) u();
-        else unlistenFn = u;
-      });
-    });
-    return () => {
-      unmounted = true;
-      unlistenFn?.();
-    };
   }, []);
 
   useEffect(() => {
@@ -156,6 +113,12 @@ export default function CfApp({ onBack }: CfAppProps) {
       window.removeEventListener('beforeunload', stopNetwork);
       stopNetwork();
       gsap.globalTimeline.clear();
+      try {
+        menuRef.current?.destroy();
+      } catch {
+        /* ignore */
+      }
+      menuRef.current = null;
       if (rendererRef.current) rendererRef.current.destroy();
       else if (appRef.current) {
         appRef.current.destroy({ removeView: false }, { children: true });
@@ -168,6 +131,11 @@ export default function CfApp({ onBack }: CfAppProps) {
   useEffect(() => {
     rendererRef.current?.setDebugMode(debugMode);
   }, [debugMode]);
+
+  // Keep RuntimeMenu chrome in sync with start-screen checkbox / Ctrl+M
+  useEffect(() => {
+    menuRef.current?.setVisible(showMenu);
+  }, [showMenu]);
 
   useEffect(() => {
     if (!appRef.current || !rendererRef.current?.project) return;
@@ -193,18 +161,13 @@ export default function CfApp({ onBack }: CfAppProps) {
     return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
 
-  const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(console.error);
-    } else {
-      document.exitFullscreen();
-    }
-  };
-
   const boot = async (assets: ProjectAssets) => {
     const canvas = canvasRef.current;
+    const container = containerRef.current;
+    const chrome = chromeRef.current;
     if (!canvas) throw new Error('Canvas reference missing');
+    if (!container) throw new Error('Container reference missing');
+    if (!chrome) throw new Error('Chrome host missing');
 
     blobUrlsRef.current.push(...assets.blobUrls);
     await new Promise((r) => setTimeout(r, 50));
@@ -218,11 +181,28 @@ export default function CfApp({ onBack }: CfAppProps) {
       orientation,
       debugMode,
       previousRenderer: rendererRef.current,
+      previousMenu: menuRef.current,
       onOrientationChange: setOrientation,
+      menu: {
+        // Strip above canvas — not over Pixi GUI
+        mount: chrome,
+        placement: 'bar',
+        visible: showMenu,
+        fullscreenTarget: container,
+        host: {
+          openNative: () => hostActionsRef.current.openNative(),
+          openZip: () => hostActionsRef.current.openZip(),
+          toggleDevtools: () => hostActionsRef.current.toggleDevtools(),
+          // reload uses RuntimeMenu default (stopSystems + location.reload)
+        },
+        onDebugChange: setDebugMode,
+        onVisibilityChange: setShowMenu,
+      },
     });
 
     appRef.current = result.app;
     rendererRef.current = result.renderer;
+    menuRef.current = result.menu;
     scriptElementsRef.current.push(...result.scriptElements);
     blobUrlsRef.current.push(...result.scriptBlobUrls);
     setProject(result.project);
@@ -269,7 +249,19 @@ export default function CfApp({ onBack }: CfAppProps) {
     }
   };
 
-  actionsRef.current = { handleNativeOpen, toggleFullscreen };
+  hostActionsRef.current = {
+    openNative: handleNativeOpen,
+    openZip: () => fileInputRef.current?.click(),
+    toggleDevtools: async () => {
+      try {
+        const core = await import('@tauri-apps/api/core');
+        const isOpen = await core.invoke<boolean>('is_devtools_open');
+        await core.invoke('set_devtools', { open: !isOpen });
+      } catch (e) {
+        console.warn('[CfApp] toggleDevtools failed (not Tauri?):', e);
+      }
+    },
+  };
 
   const currentWidth = project
     ? orientation === 'landscape'
@@ -336,37 +328,22 @@ export default function CfApp({ onBack }: CfAppProps) {
                 </button>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-700/30 rounded-xl">
                   <input
                     type="checkbox"
-                    checked={debugMode}
-                    onChange={(e) => setDebugMode(e.target.checked)}
+                    checked={showMenu}
+                    onChange={(e) => setShowMenu(e.target.checked)}
                     className="w-5 h-5 rounded border-gray-600 text-blue-500 bg-gray-800"
                   />
-                  <span className="text-gray-300 font-medium">Show Outline</span>
+                  <span className="text-gray-300 font-medium">Show menu</span>
                 </label>
-                <div className="flex gap-3">
-                  {(['landscape', 'portrait'] as const).map((o) => (
-                    <label
-                      key={o}
-                      className={`flex-1 text-center py-3 rounded-xl border cursor-pointer text-sm font-medium capitalize ${
-                        orientation === o
-                          ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                          : 'bg-gray-700/30 border-transparent text-gray-400'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="orientation"
-                        className="hidden"
-                        checked={orientation === o}
-                        onChange={() => setOrientation(o)}
-                      />
-                      {o}
-                    </label>
-                  ))}
-                </div>
+                <p className="text-center text-gray-500 text-xs px-1">
+                  Toggle the runtime menu anytime with{' '}
+                  <kbd className="px-1.5 py-0.5 rounded bg-gray-700/80 text-gray-300 font-mono text-[11px]">
+                    Ctrl+M
+                  </kbd>
+                </p>
               </div>
 
               {loading && (
@@ -385,43 +362,58 @@ export default function CfApp({ onBack }: CfAppProps) {
           </div>
         )}
 
+        {/* Project stage: chrome strip (sibling) + canvas box — menu never covers GUI */}
         <div
-          ref={containerRef}
-          className={`relative overflow-hidden transition-opacity duration-500 ${
-            projectLoaded ? 'opacity-100 block' : 'opacity-0 hidden'
+          className={`flex flex-col items-stretch transition-opacity duration-500 ${
+            projectLoaded ? 'opacity-100' : 'opacity-0 pointer-events-none absolute'
           }`}
           style={
             isFullscreen
-              ? {
-                  width: '100vw',
-                  height: '100vh',
-                  background: '#000',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }
+              ? { width: '100vw', height: '100vh', background: '#000' }
               : {
                   maxWidth: '100%',
                   maxHeight: '100%',
-                  aspectRatio: `${currentWidth} / ${currentHeight}`,
+                  // chrome (~36px) + canvas aspect box
+                  width: 'min(100%, max-content)',
                 }
           }
         >
+          <div ref={chromeRef} className="shrink-0 w-full relative z-20" />
           <div
+            ref={containerRef}
+            className="relative overflow-hidden bg-black"
             style={
               isFullscreen
                 ? {
-                    width: '100%',
-                    height: '100%',
-                    aspectRatio: `${currentWidth} / ${currentHeight}`,
+                    flex: 1,
+                    minHeight: 0,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }
-                : { width: '100%', height: '100%' }
+                : {
+                    width: currentWidth,
+                    maxWidth: '100%',
+                    aspectRatio: `${currentWidth} / ${currentHeight}`,
+                  }
             }
           >
-            <canvas ref={canvasRef} className="w-full h-full object-contain bg-black" />
+            <div
+              style={
+                isFullscreen
+                  ? {
+                      width: '100%',
+                      height: '100%',
+                      aspectRatio: `${currentWidth} / ${currentHeight}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }
+                  : { width: '100%', height: '100%' }
+              }
+            >
+              <canvas ref={canvasRef} className="w-full h-full object-contain bg-black" />
+            </div>
           </div>
         </div>
       </div>

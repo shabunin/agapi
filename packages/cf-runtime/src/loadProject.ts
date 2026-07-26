@@ -4,8 +4,32 @@ import { parseGUI, type CFProject } from './parser';
 import { CFRenderer } from './renderer';
 import { CFAPI } from './cf';
 import { joinStore } from './joinStore';
+import {
+  RuntimeMenu,
+  type RuntimeMenuHost,
+  type RuntimeMenuPlacement,
+} from './chrome/runtimeMenu';
 
 export type Orientation = 'landscape' | 'portrait';
+
+export interface LoadProjectMenuOptions {
+  /**
+   * Where to mount chrome.
+   * Prefer a dedicated strip **above** the canvas (placement `bar`).
+   * Defaults to `canvas.parentElement`.
+   * Pass `false` to disable chrome entirely.
+   */
+  mount?: HTMLElement | false;
+  /** Prefer the canvas box only — not the menu strip. */
+  fullscreenTarget?: HTMLElement;
+  host?: RuntimeMenuHost;
+  onDebugChange?: (debug: boolean) => void;
+  onVisibilityChange?: (visible: boolean) => void;
+  /** Initial chrome visibility; default true. Ctrl+M toggles. */
+  visible?: boolean;
+  /** default `bar` — strip above GUI, no overlap */
+  placement?: RuntimeMenuPlacement;
+}
 
 export interface LoadProjectOptions {
   guiXml: string;
@@ -19,6 +43,13 @@ export interface LoadProjectOptions {
   onOrientationChange?: (o: Orientation) => void;
   /** Previous renderer to tear down (stage children only). */
   previousRenderer?: CFRenderer | null;
+  /** Destroy previous web menu when reloading a project. */
+  previousMenu?: RuntimeMenu | null;
+  /**
+   * Web runtime menu (replaces native Tauri menu).
+   * `true` / omit → enable with defaults; `false` → off.
+   */
+  menu?: boolean | LoadProjectMenuOptions;
 }
 
 export interface LoadProjectResult {
@@ -29,11 +60,13 @@ export interface LoadProjectResult {
   scriptElements: HTMLScriptElement[];
   /** Blob URLs created for scripts — revoke on cleanup. */
   scriptBlobUrls: string[];
+  /** DOM chrome menu; destroy on next load / unmount. */
+  menu: RuntimeMenu | null;
 }
 
 /**
  * Parse a CF GUI, mount Pixi renderer, inject scripts, run userMain, start systems.
- * Host networking (window.net / installStdlib) must already be in place.
+ * Host networking (window.agapi / installStdlib) must already be in place.
  */
 export async function loadProject(options: LoadProjectOptions): Promise<LoadProjectResult> {
   const {
@@ -57,6 +90,12 @@ export async function loadProject(options: LoadProjectOptions): Promise<LoadProj
     } catch (e) {
       console.warn('[loadProject] prev CF.stopSystems failed:', e);
     }
+  }
+
+  try {
+    options.previousMenu?.destroy();
+  } catch (e) {
+    console.warn('[loadProject] previousMenu.destroy failed:', e);
   }
 
   const project = await parseGUI(guiXml);
@@ -192,5 +231,31 @@ export async function loadProject(options: LoadProjectOptions): Promise<LoadProj
     }
   }, 0);
 
-  return { project, renderer, app, scriptElements, scriptBlobUrls };
+  let menu: RuntimeMenu | null = null;
+  const menuOpt = options.menu;
+  if (menuOpt !== false) {
+    const menuCfg: LoadProjectMenuOptions =
+      menuOpt === true || menuOpt === undefined ? {} : menuOpt;
+    if (menuCfg.mount !== false) {
+      const mountEl = menuCfg.mount ?? canvas.parentElement;
+      if (mountEl) {
+        menu = new RuntimeMenu({
+          mount: mountEl,
+          fullscreenTarget: menuCfg.fullscreenTarget ?? mountEl,
+          renderer,
+          app,
+          host: menuCfg.host,
+          initialOrientation: orientation,
+          initialDebug: debugMode,
+          onOrientationChange,
+          onDebugChange: menuCfg.onDebugChange,
+          onVisibilityChange: menuCfg.onVisibilityChange,
+          visible: menuCfg.visible,
+          placement: menuCfg.placement ?? 'bar',
+        });
+      }
+    }
+  }
+
+  return { project, renderer, app, scriptElements, scriptBlobUrls, menu };
 }

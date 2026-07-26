@@ -23,7 +23,19 @@ export type { TokenContext } from './tokenEngine';
 export { ControlSystem, runMacroByName, stopMacroByName } from './systemManager';
 
 export { loadProject } from './loadProject';
-export type { LoadProjectOptions, LoadProjectResult, Orientation } from './loadProject';
+export type {
+  LoadProjectOptions,
+  LoadProjectResult,
+  LoadProjectMenuOptions,
+  Orientation,
+} from './loadProject';
+
+export { RuntimeMenu } from './chrome/runtimeMenu';
+export type {
+  RuntimeMenuHost,
+  RuntimeMenuOptions,
+  RuntimeMenuPlacement,
+} from './chrome/runtimeMenu';
 
 export { EVENTS, CONSTANTS } from './jsapi/constants';
 export type { CFContext, CFCallback, Watcher } from './jsapi/types';
