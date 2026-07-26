@@ -24,7 +24,26 @@ export { dgram } from './dgram/index';
 export { default as http, createServer, request, get } from './http/index';
 export { default as dns, lookup as dnsLookup, lookupAsync } from './dns/index';
 export { default as tls, connect as tlsConnect } from './tls/index';
-export type { DnsLookupAddress, DnsLookupOptions, DnsHost, TlsHost, TlsConnectOptions } from './host';
+export {
+  default as mdns,
+  browse as mdnsBrowse,
+  publish as mdnsPublish,
+  MdnsBrowser,
+} from './mdns/index';
+export type {
+  DnsLookupAddress,
+  DnsLookupOptions,
+  DnsHost,
+  TlsHost,
+  TlsConnectOptions,
+  MdnsHost,
+  MdnsService,
+  MdnsBrowseHandle,
+  MdnsPublishHandle,
+  MdnsBrowseEvent,
+  MdnsBrowseEventType,
+  MdnsPublishOptions,
+} from './host';
 
 // Re-export protocol payload type for convenience
 export type { NetEventPayload } from '@agapi/host-protocol';

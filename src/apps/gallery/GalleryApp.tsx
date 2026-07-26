@@ -21,7 +21,7 @@ import type { GalleryToolId } from './types';
 import TlsTool from './tools/TlsTool';
 import HttpTool from './tools/HttpTool';
 import DnsTool from './tools/DnsTool';
-import MdnsStub from './tools/MdnsStub';
+import MdnsTool from './tools/MdnsTool';
 import CameraStub from './tools/CameraStub';
 import BluetoothStub from './tools/BluetoothStub';
 import WebrtcInfo from './tools/WebrtcInfo';
@@ -79,7 +79,7 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
     return <DnsTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'mdns') {
-    return <MdnsStub onBack={() => setTool('hub')} />;
+    return <MdnsTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'camera') {
     return <CameraStub onBack={() => setTool('hub')} />;

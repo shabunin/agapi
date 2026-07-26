@@ -8,7 +8,8 @@
     "./net": "./src/net/index.ts",
     "./http": "./src/http/index.ts",
     "./dns": "./src/dns.ts",
-    "./tls": "./src/tls/index.ts"
+    "./tls": "./src/tls/index.ts",
+    "./mdns": "./src/mdns.ts"
   },
   "files": [
     "src"

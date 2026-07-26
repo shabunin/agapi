@@ -15,6 +15,7 @@
     "./http": "./src/http/index.ts",
     "./dns": "./src/dns/index.ts",
     "./tls": "./src/tls/index.ts",
+    "./mdns": "./src/mdns/index.ts",
     "./install": "./src/install.ts"
   },
   "files": [

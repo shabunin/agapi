@@ -4,6 +4,7 @@ use tauri::{Manager, AppHandle, Runtime};
 use tokio::sync::Mutex;
 
 pub mod dns;
+pub mod mdns;
 pub mod tcp;
 pub mod tls;
 pub mod udp;
@@ -22,4 +23,5 @@ pub fn init_state<R: Runtime>(app: &AppHandle<R>) {
         tcp_servers: Arc::new(Mutex::new(HashMap::new())),
         tls_sockets: Arc::new(Mutex::new(HashMap::new())),
     });
+    mdns::init_state(app);
 }

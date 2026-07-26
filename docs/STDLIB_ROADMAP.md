@@ -36,9 +36,10 @@ gallery apps / drivers / CF scripts
 | **T0** | `events`, `Buffer`, `process` (partial) | ✅ |
 | **T1** | `net`, `dgram`, `http` (+ host) | ✅ happy-path |
 | **T1+** | `dns.lookup`, `tls.connect` (client) | ✅ |
+| **T1++** | `mdns.browse` / `publish` | ✅ lab (Tauri / mdns-sd) |
 | **T2** | `stream` / backpressure / `drain` | ❌ |
 | **T3** | `fs` subset | ❌ |
-| **T4** | discovery (`mdns`), mobile, media | ❌ host + browser probes |
+| **T4** | mobile, media (camera / BT / WebRTC) | ❌ host + browser probes |
 
 Globals after `installStdlib`: **`agapi.{net,dgram,http,dns,tls,Buffer,process,host,version}`**.
 
@@ -81,7 +82,7 @@ Globals after `installStdlib`: **`agapi.{net,dgram,http,dns,tls,Buffer,process,h
 | **TLS client** | `tls.connect` | next |
 | **HTTP lab** (mini Postman) | `http.request` / `get` | next |
 | **DNS** | `dns.lookup` | next |
-| **mDNS** | future host capability | stub → implement |
+| **mDNS** | `mdns` | lab (live tool) |
 | **Camera** | mobile / host API | stub |
 | **Bluetooth** | mobile / host API | stub |
 | **WebRTC** | browser + later host | info / capability page |
@@ -192,3 +193,4 @@ Do not mix stdlib host changes with CF GUI refactors in one PR.
 | Date | Note |
 |------|------|
 | 2026-07-26 | Initial roadmap + gallery plan (sockets → TLS → HTTP → DNS → mDNS → mobile/media stubs) |
+| 2026-07-26 | mDNS lab: Rust `mdns-sd`, `agapi.mdns`, gallery MdnsTool |

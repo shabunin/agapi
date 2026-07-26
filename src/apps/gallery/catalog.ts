@@ -37,9 +37,9 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
   {
     id: 'mdns',
     title: 'mDNS',
-    blurb: 'Browse / advertise local services (Bonjour-style). Host WIP.',
-    surface: 'agapi.mdns (planned)',
-    status: 'stub',
+    blurb: 'Browse / advertise local services (Bonjour / DNS-SD).',
+    surface: 'agapi.mdns',
+    status: 'lab',
     accent: 'amber',
   },
   {

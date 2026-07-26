@@ -9,6 +9,7 @@ Target: **Node-shaped APIs** for CF scripts and control protocols — not a full
 | **T0** | `events`, `Buffer`, `process` (partial) | ✅ shipped |
 | **T1** | `net`, `dgram`, `http` (+ host) | ✅ happy-path + polish |
 | **T1+** | `dns.lookup`, `tls.connect` (client) | ✅ |
+| **T1++** | `mdns.browse` / `mdns.publish` | ✅ lab (Tauri) |
 | **T2** | `stream` / backpressure | ❌ not yet |
 | **T3** | `fs` subset | ❌ not yet |
 
@@ -23,6 +24,7 @@ Single namespace: **`window.agapi`** / **`globalThis.agapi`** (no top-level `win
 | `agapi.http` | createServer / request / get / WebSocketServer |
 | `agapi.dns` | `lookup` / `lookupAsync` |
 | `agapi.tls` | `connect` (client only) |
+| `agapi.mdns` | `browse` / `publish` (DNS-SD; Tauri host) |
 | `agapi.Buffer` | minimal subset (from/alloc/concat/toString) |
 | `agapi.process` | `env`, `platform`, `nextTick`, `cwd()` stub |
 | `agapi.host` | active host name (`tauri`, `mock`, …) |
@@ -92,6 +94,33 @@ s.on('data', (buf) => console.log(buf.toString()));
 
 Events: `secureConnect`, `connect`, `data` (Buffer), `finish`, `end`, `close`, `error`.  
 No `tls.createServer` yet.
+
+## mDNS / DNS-SD
+
+Host-backed (`mdns-sd` in Tauri). Not available on browser mock host.
+
+```js
+// Browse (service type with or without .local.)
+const handle = agapi.mdns.browse('_http._tcp', (ev) => {
+  if (ev.type === 'resolved' && ev.service) {
+    console.log(ev.service.name, ev.service.addresses, ev.service.port, ev.service.txt);
+  }
+  if (ev.type === 'removed') console.log('gone', ev.fullname);
+});
+// handle.stop();
+
+// Publish
+const pub = await agapi.mdns.publish({
+  type: '_agapi-demo._tcp',
+  name: 'My Panel',
+  port: 8080,
+  txt: { path: '/' },
+});
+// await pub.stop();
+```
+
+Browse events: `started`, `found`, `resolved`, `removed`, `stopped`, `error`.  
+Multicast requires real network permissions (desktop LAN / mobile local-network entitlement).
 
 ## Explicit non-goals (for now)
 
