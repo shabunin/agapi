@@ -14,15 +14,21 @@ Target: **Node-shaped APIs** for CF scripts and control protocols — not a full
 
 ## Globals (after `installStdlib`)
 
-| Global | Notes |
-|--------|--------|
-| `net` | TCP client/server |
-| `dgram` | UDP |
-| `http` | createServer / request / get / WebSocketServer |
-| `dns` | `lookup` / `lookupAsync` |
-| `tls` | `connect` (client only) |
-| `Buffer` | minimal subset (from/alloc/concat/toString) |
-| `process` | `env`, `platform`, `nextTick`, `cwd()` stub |
+Single namespace: **`window.agapi`** / **`globalThis.agapi`** (no top-level `window.net`, etc.).
+
+| Path | Notes |
+|------|--------|
+| `agapi.net` | TCP client/server |
+| `agapi.dgram` | UDP |
+| `agapi.http` | createServer / request / get / WebSocketServer |
+| `agapi.dns` | `lookup` / `lookupAsync` |
+| `agapi.tls` | `connect` (client only) |
+| `agapi.Buffer` | minimal subset (from/alloc/concat/toString) |
+| `agapi.process` | `env`, `platform`, `nextTick`, `cwd()` stub |
+| `agapi.host` | active host name (`tauri`, `mock`, …) |
+| `agapi.version` | stdlib version string |
+
+Application packages still use ESM: `import { net } from '@agapi/stdlib'`.
 
 ## Errors
 
@@ -58,11 +64,11 @@ socket.on('error', (err) => {
 ## DNS
 
 ```js
-dns.lookup('example.com', (err, address, family) => {
+agapi.dns.lookup('example.com', (err, address, family) => {
   // address: string, family: 4 | 6
 });
 
-dns.lookup('example.com', { family: 4, all: true }, (err, addresses) => {
+agapi.dns.lookup('example.com', { family: 4, all: true }, (err, addresses) => {
   // addresses: [{ address, family }, ...]
 });
 ```
@@ -72,7 +78,7 @@ Uses OS resolver via Rust `tokio::net::lookup_host`.
 ## TLS (client)
 
 ```js
-const s = tls.connect({
+const s = agapi.tls.connect({
   host: 'example.com',
   port: 443,
   servername: 'example.com',      // SNI
@@ -99,12 +105,12 @@ No `tls.createServer` yet.
 ## CF usage
 
 ```js
-// project script — globals already installed by agapi shell
-const s = net.connect(23, '192.168.1.10', () => {
+// project script — classic (no import); agapi installed by shell
+const s = agapi.net.connect(23, '192.168.1.10', () => {
   s.write('hello\r\n');
 });
 s.on('data', (buf) => {
-  // Buffer
+  // agapi.Buffer
   CF.setJoin('s1', buf.toString('utf8'));
 });
 ```

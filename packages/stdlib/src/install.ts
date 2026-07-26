@@ -5,23 +5,41 @@ import { dgram } from './dgram/index';
 import http from './http/index';
 import dns from './dns/index';
 import tls from './tls/index';
-import { installBufferGlobal } from './buffer';
-import { installProcessGlobal } from './process';
+import { Buffer } from './buffer';
+import { processShim } from './process';
+
+/** Single runtime surface exposed as `globalThis.agapi` / `window.agapi`. */
+export interface AgapiRuntime {
+  net: typeof net;
+  dgram: typeof dgram;
+  http: typeof http;
+  dns: typeof dns;
+  tls: typeof tls;
+  Buffer: typeof Buffer;
+  process: typeof processShim;
+  /** Active host name (`tauri`, `mock`, …). */
+  host: string;
+  /** stdlib package version string. */
+  version: string;
+}
 
 export interface InstallOptions {
   /**
-   * Attach Node-shaped globals for CF project scripts.
-   * Defaults to true in browser/webview environments.
+   * Attach `target.agapi` for CF project scripts (classic non-module scripts).
+   * Defaults to true.
    */
   globals?: boolean;
-  /** Also install global Buffer / process (default true when globals is true). */
-  nodeGlobals?: boolean;
   /** Global object to attach to (default: globalThis). */
   target?: typeof globalThis;
 }
 
+const STDLIB_VERSION = '0.0.1';
+
 /**
- * Bind a platform host into stdlib and optionally expose window.net/http/dgram.
+ * Bind a platform host into stdlib and expose a single global: `window.agapi`.
+ *
+ * Project scripts (no ESM import) use e.g. `agapi.net.connect(...)`.
+ * Application packages keep using `import { net } from '@agapi/stdlib'`.
  */
 export function installStdlib(host: AgapiHost, options: InstallOptions = {}): void {
   setHost(host);
@@ -30,33 +48,39 @@ export function installStdlib(host: AgapiHost, options: InstallOptions = {}): vo
   const target = options.target ?? globalThis;
   const useGlobals = options.globals !== false;
   if (useGlobals) {
-    const g = target as any;
-    g.net = net;
-    g.dgram = dgram;
-    g.http = http;
-    g.dns = dns;
-    g.tls = tls;
-    g.__AGAPI_HOST__ = host.name;
-
-    if (options.nodeGlobals !== false) {
-      installBufferGlobal(target);
-      installProcessGlobal(target);
-    }
+    const runtime: AgapiRuntime = {
+      net,
+      dgram,
+      http,
+      dns,
+      tls,
+      Buffer,
+      process: processShim,
+      host: host.name,
+      version: STDLIB_VERSION,
+    };
+    (target as any).agapi = runtime;
   }
 
-  console.log(`[stdlib] installed host "${host.name}"`);
+  console.log(`[stdlib] installed host "${host.name}" → globalThis.agapi`);
 }
 
 export function uninstallStdlib(options: InstallOptions = {}): void {
   setHost(null);
   // leave mock provider as default on net — setProvider stays until next install
-  const g = (options.target ?? globalThis) as any;
+  const target = options.target ?? globalThis;
   if (options.globals !== false) {
-    delete g.net;
-    delete g.dgram;
-    delete g.http;
-    delete g.dns;
-    delete g.tls;
-    delete g.__AGAPI_HOST__;
+    delete (target as any).agapi;
   }
 }
+
+declare global {
+  // eslint-disable-next-line no-var
+  var agapi: AgapiRuntime | undefined;
+
+  interface Window {
+    agapi: AgapiRuntime;
+  }
+}
+
+export {};

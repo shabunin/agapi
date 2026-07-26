@@ -43,7 +43,7 @@ packages/cf-runtime      all CF engine logic (no React)
 import { installStdlib } from '@agapi/stdlib';
 import { createTauriHost } from '@agapi/host-tauri';
 
-installStdlib(createTauriHost()); // sets window.net / dgram / http
+installStdlib(createTauriHost()); // sets window.agapi.{net,dgram,http,dns,tls,Buffer,process}
 ```
 
 ## Rules
