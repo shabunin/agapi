@@ -58,6 +58,11 @@ installStdlib(createTauriHost()); // sets window.agapi.{net,dgram,http,dns,tls,B
 
 See [COMPAT.md](./COMPAT.md) for T0/T1 Node-shaped API details (Buffer, errors, half-close).
 
+## Stdlib roadmap & gallery
+
+- Roadmap: [STDLIB_ROADMAP.md](./STDLIB_ROADMAP.md)
+- Interactive labs: shell → **Stdlib Gallery** (`src/apps/gallery/`) — sockets (NC), TLS, HTTP, DNS, stubs for mDNS / mobile / WebRTC / WebCodecs
+
 ## Branch
 
 Work lives on `feat/stdlib-runtime`.

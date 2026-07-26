@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { LayoutGrid, Radio, Layers } from 'lucide-react';
+import { Beaker, Layers, LayoutGrid } from 'lucide-react';
 import CfApp from './apps/CfApp';
-import NcApp from './apps/NcApp';
+import GalleryApp from './apps/gallery/GalleryApp';
 
-type AppId = 'launcher' | 'cf' | 'nc';
+type AppId = 'launcher' | 'cf' | 'gallery';
 
 /**
- * Shell launcher — pick a frontend that runs on the shared stdlib host.
- * CF App  → @agapi/cf-runtime
- * NC App  → plain React + @agapi/stdlib net/dgram (no CF)
+ * Shell launcher — product frontends on the shared stdlib host.
+ * CF App         → @agapi/cf-runtime
+ * Stdlib Gallery → interactive labs for @agapi/stdlib (+ browser probes)
  */
 export default function App() {
   const [active, setActive] = useState<AppId>('launcher');
@@ -16,8 +16,8 @@ export default function App() {
   if (active === 'cf') {
     return <CfApp onBack={() => setActive('launcher')} />;
   }
-  if (active === 'nc') {
-    return <NcApp onBack={() => setActive('launcher')} />;
+  if (active === 'gallery') {
+    return <GalleryApp onBack={() => setActive('launcher')} />;
   }
 
   return (
@@ -64,23 +64,23 @@ export default function App() {
 
           <button
             type="button"
-            onClick={() => setActive('nc')}
+            onClick={() => setActive('gallery')}
             className="w-full text-left group p-5 rounded-2xl border border-gray-800 bg-gray-900/80 hover:border-cyan-500/40 hover:bg-gray-900 transition-all active:scale-[0.99]"
           >
             <div className="flex items-start gap-4">
               <div className="w-11 h-11 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-transform">
-                <Radio size={22} />
+                <Beaker size={22} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-lg text-gray-100 group-hover:text-white">
-                  NC Console
+                  Stdlib Gallery
                 </div>
                 <p className="text-sm text-gray-500 mt-1 leading-relaxed">
-                  Netcat-style TCP/UDP tool — connect, listen, send text or hex.
-                  No CommandFusion, only stdlib sockets.
+                  Labs for net, TLS, HTTP, DNS — plus stubs for mDNS, mobile, WebRTC,
+                  WebCodecs. Includes the former NC console.
                 </p>
                 <p className="text-xs text-cyan-400/80 mt-2 font-mono">
-                  @agapi/stdlib · net / dgram
+                  @agapi/stdlib · docs/STDLIB_ROADMAP.md
                 </p>
               </div>
             </div>

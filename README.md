@@ -10,6 +10,12 @@ shell  →  @agapi/cf-runtime  →  @agapi/stdlib  →  @agapi/host-tauri  →  
 
 Branch: `feat/stdlib-runtime`.
 
+### Docs
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [stdlib COMPAT](docs/COMPAT.md)
+- [stdlib roadmap](docs/STDLIB_ROADMAP.md) (+ **Stdlib Gallery** app in the shell)
+
 ### Local
 
 ```bash

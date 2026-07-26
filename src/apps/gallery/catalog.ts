@@ -1,0 +1,77 @@
+import type { GalleryToolMeta } from './types';
+
+/** Order = gallery display order / roadmap sequence. */
+export const GALLERY_TOOLS: GalleryToolMeta[] = [
+  {
+    id: 'sockets',
+    title: 'Sockets (NC)',
+    blurb: 'Netcat-style TCP client/server and UDP — send text or hex.',
+    surface: 'agapi.net · agapi.dgram',
+    status: 'live',
+    accent: 'cyan',
+  },
+  {
+    id: 'tls',
+    title: 'TLS client',
+    blurb: 'Secure TCP via tls.connect — SNI, optional insecure lab mode.',
+    surface: 'agapi.tls',
+    status: 'lab',
+    accent: 'emerald',
+  },
+  {
+    id: 'http',
+    title: 'HTTP lab',
+    blurb: 'Mini Postman: method, URL, headers, body → status + response.',
+    surface: 'agapi.http',
+    status: 'lab',
+    accent: 'violet',
+  },
+  {
+    id: 'dns',
+    title: 'DNS lookup',
+    blurb: 'Resolve hostnames through the OS resolver (host-backed).',
+    surface: 'agapi.dns',
+    status: 'lab',
+    accent: 'sky',
+  },
+  {
+    id: 'mdns',
+    title: 'mDNS',
+    blurb: 'Browse / advertise local services (Bonjour-style). Host WIP.',
+    surface: 'agapi.mdns (planned)',
+    status: 'stub',
+    accent: 'amber',
+  },
+  {
+    id: 'camera',
+    title: 'Camera',
+    blurb: 'Mobile / host camera capture for panels and diagnostics.',
+    surface: 'host mobile API (planned)',
+    status: 'stub',
+    accent: 'rose',
+  },
+  {
+    id: 'bluetooth',
+    title: 'Bluetooth',
+    blurb: 'BLE / classic hooks for device pairing and control.',
+    surface: 'host mobile API (planned)',
+    status: 'stub',
+    accent: 'indigo',
+  },
+  {
+    id: 'webrtc',
+    title: 'WebRTC',
+    blurb: 'Browser capability probe — media, RTCPeerConnection, data channels.',
+    surface: 'browser WebRTC',
+    status: 'info',
+    accent: 'fuchsia',
+  },
+  {
+    id: 'webcodecs',
+    title: 'WebCodecs',
+    blurb: 'Browser encode/decode support matrix (VideoEncoder, AudioDecoder, …).',
+    surface: 'browser WebCodecs',
+    status: 'info',
+    accent: 'teal',
+  },
+];
