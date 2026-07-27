@@ -148,18 +148,14 @@ req.end();`,
     {
       id: 'http-local-tls',
       title: 'Local HTTPS',
-      description: 'rejectUnauthorized:false + optional SNI for device certs',
-      code: `// URL may be an IP; set servername if the device cert expects a name
+      description: 'rejectUnauthorized:false — accept self-signed device certs',
+      code: `// URL is often a bare IP with a self-signed cert on local gear
 
 const req = agapi.http.request({
   url: 'https://192.168.1.174:1843/xml/device_description.xml',
   method: 'GET',
   rejectUnauthorized: false, // default if omitted — accept self-signed / bad hostname
-  servername: 'panel.local', // TLS SNI; also default Host
-  headers: {
-    Accept: 'application/xml',
-    // Host: 'panel.local', // optional override
-  },
+  headers: { Accept: 'application/xml' },
 }, (res) => {
   const chunks = [];
   res.on('data', (c) => chunks.push(c));
@@ -190,6 +186,17 @@ const req = agapi.http.request({
 
 req.write(body);
 req.end();`,
+    },
+    {
+      id: 'http-fetch',
+      title: 'fetch()',
+      description: 'Plain browser fetch — no agapi options, no cert bypass',
+      code: `// Ordinary fetch(), untouched by agapi: Tauri's own IPC uses global
+// fetch() internally, so stdlib never overrides it. Use agapi.http.request
+// for local self-signed gear instead — fetch() can't skip cert checks.
+
+const res = await fetch('https://httpbin.org/ip');
+console.log(res.status, await res.text());`,
     },
   ],
 
@@ -308,6 +315,18 @@ ws.onmessage = (ev) => {
     console.log('text', ev.data);
   }
 };`,
+    },
+    {
+      id: 'ws-client-browser',
+      title: 'Browser WebSocket',
+      description: 'Plain global WebSocket — stdlib never replaces it',
+      code: `// Same API shape as agapi.http.WebSocket, unrelated implementation:
+// this is the browser/webview's own networking stack.
+const ws = new WebSocket('wss://ws.postman-echo.com/raw');
+
+ws.onopen = () => ws.send('hello from browser WebSocket');
+ws.onmessage = (ev) => console.log('recv', ev.data);
+ws.onclose = (ev) => console.log('closed', ev.code, ev.reason);`,
     },
   ],
 

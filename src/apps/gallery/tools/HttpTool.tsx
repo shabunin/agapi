@@ -16,6 +16,8 @@ export default function HttpTool({ onBack }: { onBack: () => void }) {
   const [body, setBody] = useState('');
   /** false = accept invalid cert/hostname (default for local gear) */
   const [rejectUnauthorized, setRejectUnauthorized] = useState(false);
+  /** Use plain, unmodified browser fetch() instead of agapi.http.request. */
+  const [useFetch, setUseFetch] = useState(false);
   const [busy, setBusy] = useState(false);
   const [statusLine, setStatusLine] = useState('');
   const [respHeaders, setRespHeaders] = useState('');
@@ -35,6 +37,32 @@ export default function HttpTool({ onBack }: { onBack: () => void }) {
     } catch (e) {
       setError(`Headers JSON: ${e}`);
       setBusy(false);
+      return;
+    }
+
+    const hasBody = !!body && method !== 'GET' && method !== 'HEAD';
+
+    if (useFetch) {
+      // Plain, unmodified browser/webview fetch() — no agapi options apply
+      // here. Tauri's own IPC uses global fetch() internally, so stdlib
+      // never replaces it; this is exactly what any other library gets.
+      fetch(url, {
+        method,
+        headers,
+        body: hasBody ? body : undefined,
+      })
+        .then(async (res) => {
+          setStatusLine(`${res.status} ${res.statusText}`.trim());
+          const headerLines: string[] = [];
+          res.headers.forEach((v, k) => headerLines.push(`${k}: ${v}`));
+          setRespHeaders(headerLines.join('\n'));
+          setRespBody((await res.text()).slice(0, 200_000));
+          setBusy(false);
+        })
+        .catch((e) => {
+          setError(e?.message || String(e));
+          setBusy(false);
+        });
       return;
     }
 
@@ -81,7 +109,7 @@ export default function HttpTool({ onBack }: { onBack: () => void }) {
         setBusy(false);
       });
 
-      if (body && method !== 'GET' && method !== 'HEAD') {
+      if (hasBody) {
         req.write(body);
       }
       req.end();
@@ -94,12 +122,37 @@ export default function HttpTool({ onBack }: { onBack: () => void }) {
   return (
     <ToolShell
       title="HTTP"
-      surface="agapi.http.request"
+      surface={useFetch ? 'fetch()' : 'agapi.http.request'}
       status="lab"
       onBack={onBack}
       examples={examplesFor('http')}
     >
       <div className="p-4 max-w-3xl mx-auto space-y-4">
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setUseFetch(false)}
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+              !useFetch
+                ? 'bg-violet-500/20 text-violet-300 border border-violet-500/40'
+                : 'bg-gray-900/50 text-gray-500 border border-gray-800 hover:text-gray-300'
+            }`}
+          >
+            agapi.http.request
+          </button>
+          <button
+            type="button"
+            onClick={() => setUseFetch(true)}
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+              useFetch
+                ? 'bg-violet-500/20 text-violet-300 border border-violet-500/40'
+                : 'bg-gray-900/50 text-gray-500 border border-gray-800 hover:text-gray-300'
+            }`}
+          >
+            fetch()
+          </button>
+        </div>
+
         <div className="flex flex-col sm:flex-row gap-2">
           <select
             value={method}
@@ -129,20 +182,22 @@ export default function HttpTool({ onBack }: { onBack: () => void }) {
           </button>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer p-3 rounded-xl bg-gray-900/50 border border-gray-800">
-          <input
-            type="checkbox"
-            checked={!rejectUnauthorized}
-            onChange={(e) => setRejectUnauthorized(!e.target.checked)}
-            className="rounded border-gray-600"
-          />
-          <span>
-            <span className="font-medium">Skip certificate verification</span>
-            <span className="block text-xs text-gray-500">
-              rejectUnauthorized: false — accept self-signed / hostname mismatch
+        {!useFetch && (
+          <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer p-3 rounded-xl bg-gray-900/50 border border-gray-800">
+            <input
+              type="checkbox"
+              checked={!rejectUnauthorized}
+              onChange={(e) => setRejectUnauthorized(!e.target.checked)}
+              className="rounded border-gray-600"
+            />
+            <span>
+              <span className="font-medium">Skip certificate verification</span>
+              <span className="block text-xs text-gray-500">
+                rejectUnauthorized: false — accept self-signed / hostname mismatch
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        )}
 
         <label className="block text-xs text-gray-500">
           Headers (JSON object)
@@ -186,8 +241,9 @@ export default function HttpTool({ onBack }: { onBack: () => void }) {
         )}
 
         <p className="text-xs text-gray-600">
-          Needs Tauri. Skip verification only disables cert checks — not broken TLS
-          ciphers.
+          {useFetch
+            ? "Plain browser fetch() — no agapi options, can't bypass certs. Tauri's own IPC uses global fetch() internally, so stdlib never touches it; use a real public endpoint (self-signed local gear will fail here)."
+            : 'Needs Tauri. Skip verification only disables cert checks — not broken TLS ciphers.'}
         </p>
       </div>
     </ToolShell>

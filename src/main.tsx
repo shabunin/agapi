@@ -13,7 +13,7 @@ const isTauri =
   !!(window as any).__TAURI_INTERNALS__;
 
 if (isTauri) {
-  installStdlib(createTauriHost(), { replaceFetch: true, replaceWebSocket: true });
+  installStdlib(createTauriHost());
 } else {
   // Browser preview: mock net/dgram; http/dns/tls need a real host
   installStdlib({

@@ -19,12 +19,16 @@ const STATE_CLASS: Record<number, string> = {
 };
 
 /**
- * Live WebSocket client lab (MDN-compatible `agapi.http.WebSocket`).
- * Dials out to a remote server — the counterpart to the WebSocket server
- * tool, which accepts inbound connections instead.
+ * Live WebSocket client lab. Toggles between `agapi.http.WebSocket`
+ * (MDN-compatible, backed by @tauri-apps/plugin-websocket) and the plain
+ * global `WebSocket` (browser/webview's own stack, untouched by stdlib) —
+ * both expose the same onopen/onmessage/onerror/onclose shape. Dials out
+ * to a remote server — the counterpart to the WebSocket server tool, which
+ * accepts inbound connections instead.
  */
 export default function WebSocketClientTool({ onBack }: { onBack: () => void }) {
   const [url, setUrl] = useState('wss://ws.postman-echo.com/raw');
+  const [useNative, setUseNative] = useState(false);
   const [readyState, setReadyState] = useState(3);
   const [message, setMessage] = useState('hello from agapi');
   const [log, setLog] = useState<string[]>([]);
@@ -43,7 +47,8 @@ export default function WebSocketClientTool({ onBack }: { onBack: () => void }) 
   const connect = () => {
     disconnect();
     try {
-      const ws = new http.WebSocket(url);
+      const Ctor = useNative ? WebSocket : http.WebSocket;
+      const ws = new Ctor(url);
       wsRef.current = ws;
       setReadyState(ws.readyState);
 
@@ -90,12 +95,39 @@ export default function WebSocketClientTool({ onBack }: { onBack: () => void }) 
   return (
     <ToolShell
       title="WebSocket client"
-      surface="agapi.http.WebSocket"
+      surface={useNative ? 'WebSocket (browser)' : 'agapi.http.WebSocket'}
       status="lab"
       onBack={onBack}
       examples={examplesFor('websocket-client')}
     >
       <div className="p-4 max-w-3xl mx-auto space-y-6">
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setUseNative(false)}
+            disabled={connected}
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${
+              !useNative
+                ? 'bg-lime-500/20 text-lime-300 border border-lime-500/40'
+                : 'bg-gray-900/50 text-gray-500 border border-gray-800 hover:text-gray-300'
+            }`}
+          >
+            agapi.http.WebSocket
+          </button>
+          <button
+            type="button"
+            onClick={() => setUseNative(true)}
+            disabled={connected}
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${
+              useNative
+                ? 'bg-lime-500/20 text-lime-300 border border-lime-500/40'
+                : 'bg-gray-900/50 text-gray-500 border border-gray-800 hover:text-gray-300'
+            }`}
+          >
+            WebSocket (browser)
+          </button>
+        </div>
+
         <section className="space-y-3 rounded-2xl border border-gray-800 bg-gray-900/40 p-4">
           <div className="flex flex-col sm:flex-row gap-2">
             <input
@@ -156,8 +188,10 @@ export default function WebSocketClientTool({ onBack }: { onBack: () => void }) 
         </pre>
 
         <p className="text-xs text-gray-600">
-          Default URL is Postman's public WS echo endpoint. Outbound only — this dials
-          out, same as the browser <code className="text-gray-500">WebSocket</code> API.
+          {useNative
+            ? "Plain global WebSocket — the browser/webview's own stack, untouched by stdlib."
+            : 'agapi.http.WebSocket — MDN-compatible, backed by @tauri-apps/plugin-websocket.'}{' '}
+          Default URL is Postman's public WS echo endpoint. Both are outbound only.
         </p>
       </div>
     </ToolShell>

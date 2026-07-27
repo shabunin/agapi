@@ -7,7 +7,6 @@ import { AgapiWebSocket } from './websocket';
 
 export type { Proxy as HttpProxyConfig } from '@tauri-apps/plugin-http';
 export { AgapiWebSocket as WebSocket } from './websocket';
-export { fetch } from '@tauri-apps/plugin-http';
 
 export interface HttpRequestEvent {
     id: string;

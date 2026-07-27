@@ -24,7 +24,6 @@ function createHttpHost(): HttpHost {
     get: tauriHttp.get,
     WebSocketServer: tauriHttp.WebSocketServer,
     WebSocket: tauriHttp.WebSocket,
-    fetch: tauriHttp.fetch,
   };
 }
 
