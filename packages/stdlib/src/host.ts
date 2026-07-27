@@ -16,6 +16,8 @@ export interface HttpHost {
   WebSocketServer?: new (options: { port: number }) => any;
   /** MDN-compatible `WebSocket` client (outbound only). */
   WebSocket?: new (url: string, protocols?: string | string[]) => any;
+  /** WHATWG-compatible `fetch`, usable as a drop-in `globalThis.fetch` replacement. */
+  fetch?: typeof fetch;
 }
 
 export interface DnsLookupOptions {

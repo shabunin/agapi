@@ -33,9 +33,24 @@ export interface InstallOptions {
   globals?: boolean;
   /** Global object to attach to (default: globalThis). */
   target?: typeof globalThis;
+  /**
+   * Replace `target.fetch` with the host's implementation (e.g. Tauri's
+   * cert/proxy/timeout-capable fetch). No-op with a warning if the host
+   * doesn't provide one (e.g. the browser mock host). Default: false.
+   */
+  replaceFetch?: boolean;
+  /**
+   * Replace `target.WebSocket` with the host's implementation. No-op with
+   * a warning if the host doesn't provide one. Default: false.
+   */
+  replaceWebSocket?: boolean;
 }
 
 const STDLIB_VERSION = '0.0.1';
+
+// Saved so uninstallStdlib() can put the real globals back.
+let savedFetch: typeof fetch | undefined;
+let savedWebSocket: typeof WebSocket | undefined;
 
 /**
  * Bind a platform host into stdlib and expose a single global: `window.agapi`.
@@ -65,6 +80,24 @@ export function installStdlib(host: AgapiHost, options: InstallOptions = {}): vo
     (target as any).agapi = runtime;
   }
 
+  if (options.replaceFetch) {
+    if (host.http?.fetch) {
+      savedFetch = savedFetch ?? target.fetch;
+      (target as any).fetch = host.http.fetch;
+    } else {
+      console.warn(`[stdlib] replaceFetch requested but host "${host.name}" has no http.fetch`);
+    }
+  }
+
+  if (options.replaceWebSocket) {
+    if (host.http?.WebSocket) {
+      savedWebSocket = savedWebSocket ?? target.WebSocket;
+      (target as any).WebSocket = host.http.WebSocket;
+    } else {
+      console.warn(`[stdlib] replaceWebSocket requested but host "${host.name}" has no http.WebSocket`);
+    }
+  }
+
   console.log(`[stdlib] installed host "${host.name}" → globalThis.agapi`);
 }
 
@@ -74,6 +107,14 @@ export function uninstallStdlib(options: InstallOptions = {}): void {
   const target = options.target ?? globalThis;
   if (options.globals !== false) {
     delete (target as any).agapi;
+  }
+  if (savedFetch) {
+    (target as any).fetch = savedFetch;
+    savedFetch = undefined;
+  }
+  if (savedWebSocket) {
+    (target as any).WebSocket = savedWebSocket;
+    savedWebSocket = undefined;
   }
 }
 
