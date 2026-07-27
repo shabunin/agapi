@@ -83,6 +83,7 @@ dependencies = [
  "bytes",
  "futures-util",
  "hostname",
+ "if-addrs",
  "log",
  "mdns-sd",
  "rustls",

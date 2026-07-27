@@ -1,7 +1,7 @@
 export { EventEmitter } from './events';
 export { SystemError, mapHostError } from './errors';
 export type { MapHostErrorOptions } from './errors';
-export type { AgapiHost, NetHost, HttpHost } from './host';
+export type { AgapiHost, NetHost, HttpHost, DeviceHost } from './host';
 export { getHost, setHost } from './host';
 export { installStdlib, uninstallStdlib } from './install';
 export type { InstallOptions, AgapiRuntime } from './install';
@@ -30,6 +30,7 @@ export {
   publish as mdnsPublish,
   MdnsBrowser,
 } from './mdns/index';
+export { default as device, getNetworkStatus, watchNetwork } from './device/index';
 export type {
   DnsLookupAddress,
   DnsLookupOptions,
@@ -43,6 +44,9 @@ export type {
   MdnsBrowseEvent,
   MdnsBrowseEventType,
   MdnsPublishOptions,
+  NetworkAddress,
+  NetworkStatus,
+  NetworkWatchHandle,
 } from './host';
 
 // Re-export protocol payload type for convenience

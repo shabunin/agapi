@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tauri::{Manager, AppHandle, Runtime};
 use tokio::sync::Mutex;
 
+pub mod device;
 pub mod dns;
 pub mod mdns;
 pub mod tcp;
@@ -24,4 +25,5 @@ pub fn init_state<R: Runtime>(app: &AppHandle<R>) {
         tls_sockets: Arc::new(Mutex::new(HashMap::new())),
     });
     mdns::init_state(app);
+    device::init_state(app);
 }

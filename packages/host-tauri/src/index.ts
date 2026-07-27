@@ -4,6 +4,7 @@ import * as tauriHttp from './http/index';
 import { createDnsHost } from './dns';
 import { createTlsHost } from './tls/index';
 import { createMdnsHost } from './mdns';
+import { createDeviceHost } from './device';
 
 export { TauriNetworkProvider } from './net/provider';
 export { TauriTcpSocket } from './net/socket';
@@ -13,6 +14,7 @@ export { TauriTlsSocket } from './tls/index';
 export { createDnsHost, TauriDnsHost } from './dns';
 export { createTlsHost, TauriTlsHost } from './tls/index';
 export { createMdnsHost, TauriMdnsHost } from './mdns';
+export { createDeviceHost, TauriDeviceHost } from './device';
 export * as tauriHttp from './http/index';
 export { net as tauriNet, dgram as tauriDgram } from './net/index';
 
@@ -41,6 +43,7 @@ export function createTauriHost(): AgapiHost {
     dns: createDnsHost(),
     tls: createTlsHost(),
     mdns: createMdnsHost(),
+    device: createDeviceHost(),
   };
 }
 

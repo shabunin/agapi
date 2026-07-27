@@ -6,6 +6,7 @@ import http from './http/index';
 import dns from './dns/index';
 import tls from './tls/index';
 import mdns from './mdns/index';
+import device from './device/index';
 import { Buffer } from './buffer';
 import { processShim } from './process';
 
@@ -17,6 +18,7 @@ export interface AgapiRuntime {
   dns: typeof dns;
   tls: typeof tls;
   mdns: typeof mdns;
+  device: typeof device;
   Buffer: typeof Buffer;
   process: typeof processShim;
   /** Active host name (`tauri`, `mock`, …). */
@@ -65,6 +67,7 @@ export function installStdlib(host: AgapiHost, options: InstallOptions = {}): vo
       dns,
       tls,
       mdns,
+      device,
       Buffer,
       process: processShim,
       host: host.name,

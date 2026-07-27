@@ -106,6 +106,42 @@ export interface MdnsHost {
   publish(options: MdnsPublishOptions): Promise<MdnsPublishHandle>;
 }
 
+/** One local address on a non-loopback interface. */
+export interface NetworkAddress {
+  address: string;
+  family: 'IPv4' | 'IPv6';
+  interface: string;
+  netmask: string;
+}
+
+/**
+ * Network status snapshot. `networkType` and the absence of an `ssid` field
+ * are honest best-effort limits, not oversights: distinguishing Wi-Fi from
+ * Ethernet and reading the SSID both need platform-specific APIs (nl80211,
+ * NEHotspotNetwork, WinRT, …) that no host implements yet.
+ */
+export interface NetworkStatus {
+  hasNetwork: boolean;
+  networkType: 'wifi' | 'ethernet' | 'other' | 'none';
+  addresses: NetworkAddress[];
+}
+
+export interface NetworkWatchHandle {
+  stop(): void;
+}
+
+export interface DeviceHost {
+  name: string;
+  getNetworkStatus(): Promise<NetworkStatus>;
+  /**
+   * Subscribe to network changes (Wi-Fi/Ethernet connect, disconnect,
+   * address change). Calls `onChange` with a fresh snapshot whenever the OS
+   * reports a real change. Optional: not every host backs this (e.g. no
+   * `IfChangeNotifier` equivalent on Apple platforms yet).
+   */
+  watchNetwork?(onChange: (status: NetworkStatus) => void): Promise<NetworkWatchHandle>;
+}
+
 export interface AgapiHost {
   name: string;
   net: NetHost;
@@ -113,6 +149,7 @@ export interface AgapiHost {
   dns?: DnsHost;
   tls?: TlsHost;
   mdns?: MdnsHost;
+  device?: DeviceHost;
 }
 
 /** Runtime slot set by installStdlib(). */

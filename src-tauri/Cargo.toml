@@ -42,3 +42,4 @@ webpki-roots = "0.26"
 rustls-pki-types = "1"
 mdns-sd = { version = "0.20", features = ["serde"] }
 hostname = "0.4"
+if-addrs = "0.15"
