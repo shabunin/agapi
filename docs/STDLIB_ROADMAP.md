@@ -38,7 +38,7 @@ cf-runtime may later *map* `CF.ipv4address` / `CF.startMonitoring` → `agapi.de
 | Tier | Modules | Status |
 |------|---------|--------|
 | **T0** | `events`, `Buffer`, `process` (partial) | ✅ |
-| **T1** | `net`, `dgram`, `http` (+ host) | ✅ happy-path |
+| **T1** | `net`, `dgram`, `http` (client + server), `http.WebSocket` (client), `http.WebSocketServer` (+ host) | ✅ happy-path. HTTP client/server on official `@tauri-apps/plugin-http`; WS client on official `@tauri-apps/plugin-websocket`; WS server stays custom (axum) — no official Tauri plugin accepts inbound WS |
 | **T1+** | `dns.lookup`, `tls.connect` (client) | ✅ client only — server (`tls.createServer`, https server) ❌ planned, see Phase A |
 | **T1++** | `mdns.browse` / `publish` | ✅ lab (Tauri / mdns-sd) |
 | **T2** | `stream` / backpressure / `drain` | ❌ |
@@ -63,6 +63,7 @@ Planned additions (names may refine):
 5. Prefer honest stubs + gallery **info/lab** over fake CF globals.
 6. Protocols (Matter, AV brands) live in **`@agapi/drivers`** (or sibling packages), not stdlib.
 7. Gallery validates features; it is not the public API.
+8. `installStdlib` **never replaces browser globals** (`fetch`, `WebSocket`, …) — host capabilities are opt-in via `agapi.*` only. Tried a `replaceFetch` option once: Tauri's own IPC (`invoke()`) sends commands via the page's global `fetch()` to a custom `ipc://` protocol, and `agapi.http.fetch` itself calls `invoke()` — replacing `fetch` with it recurses forever and hangs every `invoke()` call. Not fixable on our side; removed rather than left disabled-by-default as a footgun.
 
 ---
 
@@ -90,7 +91,10 @@ Planned additions (names may refine):
 |--------------|---------|--------|
 | Sockets (NC) | `agapi.net` / `dgram` | live |
 | TLS client | `agapi.tls` | lab |
-| HTTP lab | `agapi.http` | lab |
+| HTTP | `agapi.http.request` (+ browser `fetch()` toggle) | lab |
+| HTTP server | `agapi.http.createServer` | lab |
+| WebSocket server | `agapi.http.WebSocketServer` | lab |
+| WebSocket client | `agapi.http.WebSocket` (+ browser `WebSocket` toggle) | lab |
 | DNS | `agapi.dns` | lab |
 | mDNS | `agapi.mdns` | lab |
 | Crypto | browser `crypto.subtle` | lab (not `agapi.crypto` yet) |
@@ -323,3 +327,7 @@ Do **not** mix cf-runtime GUI changes into platform host PRs.
 | 2026-07-26 | mDNS lab shipped |
 | 2026-07-27 | Platform device plan: network/sensors/props/fs/nfc/notifications/biometric/haptics under **agapi** (not cf-runtime); gallery crypto (browser) noted |
 | 2026-07-27 | Noted TLS/HTTPS server gap (Phase A): both `tls.connect` and `http.createServer` are client-and-plain-only today; server-side TLS needs `rustls::ServerConfig` + `TlsAcceptor`, no official Tauri plugin covers either direction |
+| 2026-07-28 | HTTP client/server migrated off the hand-rolled reqwest/rustls client onto official `@tauri-apps/plugin-http`; added `agapi.http.WebSocket` (MDN-compatible client) via official `@tauri-apps/plugin-websocket`. `agapi.http.WebSocketServer` (inbound) stays custom — no official plugin does that |
+| 2026-07-28 | Fixed a batch of net-stack bugs found by audit: TCP server `'connection'` emitted before the socket was registered (race), IPv6 UDP bind/connect/send (bare `SocketAddr::from_str` needs brackets), UDP option setters silently swallowing OS errors, double-bind/double-connect races on UDP/TCP sockets, mDNS `browse_start` id race, `mdns` `hostname_guess()` never reading the real OS hostname, unbounded HTTP server request body |
+| 2026-07-28 | Added, then **removed**, `installStdlib({ replaceFetch, replaceWebSocket })`: `replaceFetch` hung every `invoke()` call (Tauri's own IPC uses global `fetch()`, and `agapi.http.fetch` itself calls `invoke()` — infinite recursion, not fixable on our side). Dropped `replaceWebSocket` too for the same simple rule: stdlib never touches browser globals. Gallery's HTTP/WebSocket-client tools gained an explicit per-call toggle (`agapi.http.*` vs plain `fetch()`/`WebSocket`) instead |
+| 2026-07-28 | `npm run android:debug` / `android:install:debug` — build + install a debug APK in one step (tooling, not a stdlib surface) |
