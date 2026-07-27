@@ -49,7 +49,7 @@ function formatPayload(data: string | Uint8Array | ArrayBufferView, asHex: boole
 }
 
 /**
- * Minimal netcat-like console — uses only @agapi/stdlib (no CF / Pixi).
+ * Minimal sockets console — uses only @agapi/stdlib (no CF / Pixi).
  */
 export default function NcApp({ onBack }: NcAppProps) {
   const [transport, setTransport] = useState<Transport>('tcp-client');
@@ -322,7 +322,7 @@ export default function NcApp({ onBack }: NcAppProps) {
         <div className="flex items-center gap-2">
           <TerminalIcon />
           <div>
-            <h1 className="font-semibold text-lg leading-tight">NC Console</h1>
+            <h1 className="font-semibold text-lg leading-tight">Sockets Console</h1>
             <p className="text-xs text-gray-500">stdlib net / dgram · no CF</p>
           </div>
         </div>

@@ -1,19 +1,26 @@
 import React, { useState } from 'react';
 import {
+  Activity,
   ArrowLeft,
   Beaker,
+  Bell,
   Bluetooth,
-  Camera,
+  Cpu,
+  Fingerprint,
+  FolderOpen,
   Globe,
   KeyRound,
   LayoutGrid,
   Network,
+  Nfc,
   Plug,
   Radio,
   ScanSearch,
   Server,
   Share2,
   Shield,
+  Signal,
+  Vibrate,
   Video,
   Wifi,
 } from 'lucide-react';
@@ -21,7 +28,7 @@ import type { LucideIcon } from 'lucide-react';
 import { GALLERY_TOOLS } from './catalog';
 import { StatusBadge } from './components/StatusBadge';
 import { examplesFor } from './examples';
-import type { GalleryToolId } from './types';
+import type { GalleryGroup, GalleryToolId } from './types';
 import SocketsTool from './tools/SocketsTool';
 import TlsTool from './tools/TlsTool';
 import HttpTool from './tools/HttpTool';
@@ -30,9 +37,16 @@ import WebSocketServerTool from './tools/WebSocketServerTool';
 import WebSocketClientTool from './tools/WebSocketClientTool';
 import DnsTool from './tools/DnsTool';
 import MdnsTool from './tools/MdnsTool';
-import CryptoInfo from './tools/CryptoInfo';
-import CameraStub from './tools/CameraStub';
+import NetworkStatusTool from './tools/NetworkStatusTool';
+import OsInfoTool from './tools/OsInfoTool';
 import BluetoothStub from './tools/BluetoothStub';
+import SensorsStub from './tools/SensorsStub';
+import HapticsStub from './tools/HapticsStub';
+import NotificationsStub from './tools/NotificationsStub';
+import FsStub from './tools/FsStub';
+import NfcStub from './tools/NfcStub';
+import BiometricsStub from './tools/BiometricsStub';
+import CryptoInfo from './tools/CryptoInfo';
 import WebrtcInfo from './tools/WebrtcInfo';
 import WebcodecsInfo from './tools/WebcodecsInfo';
 
@@ -45,11 +59,24 @@ const ICONS: Record<Exclude<GalleryToolId, 'hub'>, LucideIcon> = {
   'websocket-client': Plug,
   dns: ScanSearch,
   mdns: Wifi,
-  crypto: KeyRound,
-  camera: Camera,
+  'network-status': Signal,
+  'os-info': Cpu,
   bluetooth: Bluetooth,
+  sensors: Activity,
+  haptics: Vibrate,
+  notifications: Bell,
+  fs: FolderOpen,
+  nfc: Nfc,
+  biometrics: Fingerprint,
   webrtc: Network,
   webcodecs: Video,
+  crypto: KeyRound,
+};
+
+const GROUP_LABEL: Record<GalleryGroup, string> = {
+  network: 'Network',
+  device: 'Device',
+  browser: 'Browser APIs',
 };
 
 const ACCENT: Record<string, string> = {
@@ -108,14 +135,35 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
   if (tool === 'mdns') {
     return <MdnsTool onBack={() => setTool('hub')} />;
   }
-  if (tool === 'crypto') {
-    return <CryptoInfo onBack={() => setTool('hub')} />;
+  if (tool === 'network-status') {
+    return <NetworkStatusTool onBack={() => setTool('hub')} />;
   }
-  if (tool === 'camera') {
-    return <CameraStub onBack={() => setTool('hub')} />;
+  if (tool === 'os-info') {
+    return <OsInfoTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'bluetooth') {
     return <BluetoothStub onBack={() => setTool('hub')} />;
+  }
+  if (tool === 'sensors') {
+    return <SensorsStub onBack={() => setTool('hub')} />;
+  }
+  if (tool === 'haptics') {
+    return <HapticsStub onBack={() => setTool('hub')} />;
+  }
+  if (tool === 'notifications') {
+    return <NotificationsStub onBack={() => setTool('hub')} />;
+  }
+  if (tool === 'fs') {
+    return <FsStub onBack={() => setTool('hub')} />;
+  }
+  if (tool === 'nfc') {
+    return <NfcStub onBack={() => setTool('hub')} />;
+  }
+  if (tool === 'biometrics') {
+    return <BiometricsStub onBack={() => setTool('hub')} />;
+  }
+  if (tool === 'crypto') {
+    return <CryptoInfo onBack={() => setTool('hub')} />;
   }
   if (tool === 'webrtc') {
     return <WebrtcInfo onBack={() => setTool('hub')} />;
@@ -163,52 +211,63 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {GALLERY_TOOLS.map((t) => {
-            const Icon = ICONS[t.id];
-            const accent = ACCENT[t.accent] ?? ACCENT.cyan;
-            const sample = examplesFor(t.id)[0];
-            const preview = sample?.code
-              .split('\n')
-              .map((l) => l.trimEnd())
-              .filter((l) => l.length > 0 && !l.trimStart().startsWith('//'))
-              .slice(0, 2)
-              .join(' ')
-              .slice(0, 72);
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTool(t.id)}
-                className="group text-left p-4 rounded-2xl border border-gray-800 bg-gray-900/60 hover:bg-gray-900 hover:border-gray-700 transition-all active:scale-[0.99]"
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${accent}`}
-                  >
-                    <Icon size={18} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-gray-100 group-hover:text-white">
-                        {t.title}
-                      </span>
-                      <StatusBadge status={t.status} />
-                    </div>
-                    <p className="text-sm text-gray-500 mt-1 leading-relaxed">{t.blurb}</p>
-                    <p className="text-[11px] font-mono text-gray-600 mt-2">{t.surface}</p>
-                    {preview && (
-                      <p className="mt-2 text-[10px] font-mono text-cyan-500/70 truncate">
-                        {preview}
-                        {preview.length >= 72 ? '…' : ''}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        {(['network', 'device', 'browser'] as const).map((group) => {
+          const tools = GALLERY_TOOLS.filter((t) => t.group === group);
+          if (tools.length === 0) return null;
+          return (
+            <section key={group} className="mb-8 last:mb-0">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+                {GROUP_LABEL[group]}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {tools.map((t) => {
+                  const Icon = ICONS[t.id];
+                  const accent = ACCENT[t.accent] ?? ACCENT.cyan;
+                  const sample = examplesFor(t.id)[0];
+                  const preview = sample?.code
+                    .split('\n')
+                    .map((l) => l.trimEnd())
+                    .filter((l) => l.length > 0 && !l.trimStart().startsWith('//'))
+                    .slice(0, 2)
+                    .join(' ')
+                    .slice(0, 72);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setTool(t.id)}
+                      className="group text-left p-4 rounded-2xl border border-gray-800 bg-gray-900/60 hover:bg-gray-900 hover:border-gray-700 transition-all active:scale-[0.99]"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${accent}`}
+                        >
+                          <Icon size={18} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-gray-100 group-hover:text-white">
+                              {t.title}
+                            </span>
+                            <StatusBadge status={t.status} />
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1 leading-relaxed">{t.blurb}</p>
+                          <p className="text-[11px] font-mono text-gray-600 mt-2">{t.surface}</p>
+                          {preview && (
+                            <p className="mt-2 text-[10px] font-mono text-cyan-500/70 truncate">
+                              {preview}
+                              {preview.length >= 72 ? '…' : ''}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
       </main>
     </div>
   );

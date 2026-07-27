@@ -28,11 +28,18 @@ export type ExampleToolId =
   | 'websocket-client'
   | 'dns'
   | 'mdns'
-  | 'crypto'
-  | 'camera'
+  | 'network-status'
+  | 'os-info'
   | 'bluetooth'
+  | 'sensors'
+  | 'haptics'
+  | 'notifications'
+  | 'fs'
+  | 'nfc'
+  | 'biometrics'
   | 'webrtc'
-  | 'webcodecs';
+  | 'webcodecs'
+  | 'crypto';
 
 export const TOOL_EXAMPLES: Record<ExampleToolId, CodeSnippet[]> = {
   sockets: [
@@ -411,6 +418,34 @@ b.start('_googlecast._tcp');
     },
   ],
 
+  'network-status': [
+    {
+      id: 'network-status-basic',
+      title: 'getNetworkStatus',
+      description: 'Online snapshot + local addresses',
+      code: `const status = await agapi.device.getNetworkStatus();
+
+console.log(status.hasNetwork, status.networkType);
+for (const a of status.addresses) {
+  console.log(a.interface, a.family, a.address, a.netmask);
+}
+
+// networkType is a best-effort guess from interface names.
+// No ssid: needs platform-specific Wi-Fi APIs we don't have yet.`,
+    },
+    {
+      id: 'network-status-watch',
+      title: 'watchNetwork',
+      description: 'Subscribe to Wi-Fi/Ethernet connect, disconnect, address change',
+      code: `const handle = await agapi.device.watchNetwork((status) => {
+  console.log(status.hasNetwork ? 'online' : 'offline', status.networkType);
+});
+
+// later, when done watching:
+// handle.stop();`,
+    },
+  ],
+
   crypto: [
     {
       id: 'crypto-random',
@@ -531,24 +566,16 @@ console.log('ecdsa verify', ok, 'sig bytes', sig.byteLength);`,
     },
   ],
 
-  camera: [
+  'os-info': [
     {
-      id: 'camera-planned',
-      title: 'Planned shape',
-      description: 'Future host API sketch — Run probes browser camera instead',
-      code: `// FUTURE agapi.camera — not in stdlib yet
-// const cam = await agapi.camera.open({ facing: 'environment' });
+      id: 'os-info-import',
+      title: 'ESM import',
+      description: 'Package style (not runnable in playground — the gallery tool calls it directly)',
+      runnable: false,
+      code: `import { platform, version, arch, family, type, locale, hostname } from '@tauri-apps/plugin-os';
 
-// Runnable today: browser getUserMedia probe
-if (!navigator.mediaDevices?.getUserMedia) {
-  console.error('getUserMedia not available');
-} else {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-  const track = stream.getVideoTracks()[0];
-  console.log('camera track', track?.label, track?.getSettings?.());
-  stream.getTracks().forEach((t) => t.stop());
-  console.log('stopped');
-}`,
+console.log(platform(), version(), arch(), family(), type());
+console.log(await locale(), await hostname());`,
     },
   ],
 
@@ -564,6 +591,93 @@ if (!navigator.mediaDevices?.getUserMedia) {
 // await gatt.write(characteristic, data);
 
 console.log('agapi.bluetooth is not available yet');`,
+    },
+  ],
+
+  sensors: [
+    {
+      id: 'sensors-planned',
+      title: 'Planned shape',
+      description: 'Not implemented — docs only',
+      runnable: false,
+      code: `// FUTURE — accel/gyro/attitude/heading/location
+// const h = agapi.sensors.start('accelerometer', { intervalMs: 100 });
+// h.on('data', (sample) => console.log(sample));
+// h.stop();
+
+console.log('agapi.sensors is not available yet');`,
+    },
+  ],
+
+  haptics: [
+    {
+      id: 'haptics-planned',
+      title: 'Planned shape',
+      description: 'Not implemented — docs only',
+      runnable: false,
+      code: `// FUTURE
+// agapi.haptics.impact('medium');
+// agapi.haptics.notification('success');
+// agapi.haptics.selection();
+
+console.log('agapi.haptics is not available yet');`,
+    },
+  ],
+
+  notifications: [
+    {
+      id: 'notifications-planned',
+      title: 'Planned shape',
+      description: 'Not implemented — docs only',
+      runnable: false,
+      code: `// FUTURE
+// await agapi.notifications.requestPermission();
+// await agapi.notifications.show({ title: 'agapi', body: 'hello' });
+
+console.log('agapi.notifications is not available yet');`,
+    },
+  ],
+
+  fs: [
+    {
+      id: 'fs-planned',
+      title: 'Planned shape',
+      description: 'Not implemented — docs only',
+      runnable: false,
+      code: `// FUTURE — scoped subset, not full Node fs
+// await agapi.fs.writeFile('cache/log.txt', 'hello');
+// const text = await agapi.fs.readFile('cache/log.txt', 'utf8');
+
+console.log('agapi.fs is not available yet');`,
+    },
+  ],
+
+  nfc: [
+    {
+      id: 'nfc-planned',
+      title: 'Planned shape',
+      description: 'Not implemented — docs only',
+      runnable: false,
+      code: `// FUTURE — mobile host only (Android-first)
+// const tag = await agapi.nfc.scan();
+// console.log(tag.ndef);
+
+console.log('agapi.nfc is not available yet');`,
+    },
+  ],
+
+  biometrics: [
+    {
+      id: 'biometrics-planned',
+      title: 'Planned shape',
+      description: 'Not implemented — docs only',
+      runnable: false,
+      code: `// FUTURE
+// if (await agapi.biometric.isAvailable()) {
+//   await agapi.biometric.authenticate({ reason: 'Confirm it\\'s you' });
+// }
+
+console.log('agapi.biometric is not available yet');`,
     },
   ],
 

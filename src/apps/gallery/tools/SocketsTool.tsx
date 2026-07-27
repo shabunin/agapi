@@ -4,7 +4,7 @@ import { CodeExamples } from '../components/CodeExamples';
 import { examplesFor } from '../examples';
 
 /**
- * Sockets lab: docs strip + existing NC console.
+ * Sockets lab: docs strip + existing sockets console.
  * Examples stay visible above the interactive tool (self-documenting).
  */
 export default function SocketsTool({ onBack }: { onBack: () => void }) {

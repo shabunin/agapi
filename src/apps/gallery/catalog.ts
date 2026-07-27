@@ -1,14 +1,16 @@
 import type { GalleryToolMeta } from './types';
 
-/** Order = gallery display order / roadmap sequence. */
+/** Order = display order within each group. */
 export const GALLERY_TOOLS: GalleryToolMeta[] = [
+  // ── Network ──────────────────────────────────────────────
   {
     id: 'sockets',
-    title: 'Sockets (NC)',
-    blurb: 'Netcat-style TCP client/server and UDP — send text or hex.',
+    title: 'Sockets',
+    blurb: 'TCP client/server and UDP — send text or hex.',
     surface: 'agapi.net · agapi.dgram',
     status: 'live',
     accent: 'cyan',
+    group: 'network',
   },
   {
     id: 'tls',
@@ -17,6 +19,7 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     surface: 'agapi.tls',
     status: 'lab',
     accent: 'emerald',
+    group: 'network',
   },
   {
     id: 'http',
@@ -25,6 +28,7 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     surface: 'agapi.http.request',
     status: 'lab',
     accent: 'violet',
+    group: 'network',
   },
   {
     id: 'http-server',
@@ -33,6 +37,7 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     surface: 'agapi.http.createServer',
     status: 'lab',
     accent: 'blue',
+    group: 'network',
   },
   {
     id: 'websocket-server',
@@ -41,6 +46,7 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     surface: 'agapi.http.WebSocketServer',
     status: 'lab',
     accent: 'pink',
+    group: 'network',
   },
   {
     id: 'websocket-client',
@@ -49,6 +55,7 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     surface: 'agapi.http.WebSocket',
     status: 'lab',
     accent: 'lime',
+    group: 'network',
   },
   {
     id: 'dns',
@@ -57,6 +64,7 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     surface: 'agapi.dns',
     status: 'lab',
     accent: 'sky',
+    group: 'network',
   },
   {
     id: 'mdns',
@@ -65,22 +73,27 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     surface: 'agapi.mdns',
     status: 'lab',
     accent: 'amber',
+    group: 'network',
   },
+
+  // ── Device ────────────────────────────────────────────────
   {
-    id: 'crypto',
-    title: 'Crypto',
-    blurb: 'Browser Web Crypto — random, hash, HMAC, AES-GCM, PBKDF2 (not agapi.crypto).',
-    surface: 'crypto.subtle · getRandomValues',
+    id: 'network-status',
+    title: 'Network status',
+    blurb: 'Online/offline snapshot + watch, local addresses, best-effort Wi-Fi/Ethernet guess.',
+    surface: 'agapi.device.getNetworkStatus',
     status: 'lab',
-    accent: 'orange',
+    accent: 'cyan',
+    group: 'device',
   },
   {
-    id: 'camera',
-    title: 'Camera',
-    blurb: 'Mobile / host camera capture for panels and diagnostics.',
-    surface: 'host mobile API (planned)',
-    status: 'stub',
+    id: 'os-info',
+    title: 'OS info',
+    blurb: 'Platform, arch, version, hostname, locale.',
+    surface: '@tauri-apps/plugin-os',
+    status: 'lab',
     accent: 'rose',
+    group: 'device',
   },
   {
     id: 'bluetooth',
@@ -89,7 +102,64 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     surface: 'host mobile API (planned)',
     status: 'stub',
     accent: 'indigo',
+    group: 'device',
   },
+  {
+    id: 'sensors',
+    title: 'Sensors',
+    blurb: 'Accelerometer, gyroscope, attitude, heading, location.',
+    surface: 'agapi.sensors (planned)',
+    status: 'stub',
+    accent: 'amber',
+    group: 'device',
+  },
+  {
+    id: 'haptics',
+    title: 'Haptics',
+    blurb: 'Impact / notification / selection feedback.',
+    surface: 'agapi.haptics (planned)',
+    status: 'stub',
+    accent: 'fuchsia',
+    group: 'device',
+  },
+  {
+    id: 'notifications',
+    title: 'Notifications',
+    blurb: 'Local notifications — permission + show.',
+    surface: 'agapi.notifications (planned)',
+    status: 'stub',
+    accent: 'sky',
+    group: 'device',
+  },
+  {
+    id: 'fs',
+    title: 'Filesystem',
+    blurb: 'Scoped read/write/mkdir — app data, cache, not whole-disk.',
+    surface: 'agapi.fs (planned)',
+    status: 'stub',
+    accent: 'teal',
+    group: 'device',
+  },
+  {
+    id: 'nfc',
+    title: 'NFC',
+    blurb: 'NDEF scan / write — mobile-host only.',
+    surface: 'agapi.nfc (planned)',
+    status: 'stub',
+    accent: 'violet',
+    group: 'device',
+  },
+  {
+    id: 'biometrics',
+    title: 'Biometric',
+    blurb: 'Face / fingerprint availability + authenticate prompt.',
+    surface: 'agapi.biometric (planned)',
+    status: 'stub',
+    accent: 'orange',
+    group: 'device',
+  },
+
+  // ── Browser APIs ──────────────────────────────────────────
   {
     id: 'webrtc',
     title: 'WebRTC',
@@ -97,6 +167,7 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     surface: 'browser WebRTC',
     status: 'info',
     accent: 'fuchsia',
+    group: 'browser',
   },
   {
     id: 'webcodecs',
@@ -105,5 +176,15 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     surface: 'browser WebCodecs',
     status: 'info',
     accent: 'teal',
+    group: 'browser',
+  },
+  {
+    id: 'crypto',
+    title: 'Crypto',
+    blurb: 'Browser Web Crypto — random, hash, HMAC, AES-GCM, PBKDF2 (not agapi.crypto).',
+    surface: 'crypto.subtle · getRandomValues',
+    status: 'lab',
+    accent: 'orange',
+    group: 'browser',
   },
 ];
