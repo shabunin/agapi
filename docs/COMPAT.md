@@ -25,6 +25,7 @@ Single namespace: **`window.agapi`** / **`globalThis.agapi`** (no top-level `win
 | `agapi.dns` | `lookup` / `lookupAsync` |
 | `agapi.tls` | `connect` (client only) |
 | `agapi.mdns` | `browse` / `publish` (DNS-SD; Tauri host) |
+| `agapi.device` | `getNetworkStatus()` — online snapshot, local addresses (Tauri host) |
 | `agapi.Buffer` | minimal subset (from/alloc/concat/toString) |
 | `agapi.process` | `env`, `platform`, `nextTick`, `cwd()` stub |
 | `agapi.host` | active host name (`tauri`, `mock`, …) |
@@ -121,6 +122,36 @@ const pub = await agapi.mdns.publish({
 
 Browse events: `started`, `found`, `resolved`, `removed`, `stopped`, `error`.  
 Multicast requires real network permissions (desktop LAN / mobile local-network entitlement).
+
+## Device network status
+
+Host-backed (interface enumeration via `if-addrs` in Tauri). Not available on browser mock host.
+
+```js
+const status = await agapi.device.getNetworkStatus();
+// { hasNetwork, networkType, addresses }
+
+status.hasNetwork;   // boolean
+status.networkType;  // 'wifi' | 'ethernet' | 'other' | 'none'
+status.addresses;    // [{ address, family, interface, netmask }, ...]
+
+// Subscribe to changes (Wi-Fi/Ethernet connect, disconnect, address change)
+const handle = await agapi.device.watchNetwork((status) => {
+  console.log(status.hasNetwork, status.networkType);
+});
+// later: handle.stop();
+```
+
+Watch is backed by `if_addrs::IfChangeNotifier` — a background thread blocks on the OS's
+interface-change notification (netlink on Linux, equivalent on Windows/Android) and emits
+a fresh snapshot only on a real change (spurious wakeups are filtered internally, not
+debounced by us). `watchNetwork` is `async` specifically so a platform/permission failure
+(e.g. notifier creation failing) surfaces as a rejected promise, not a silent no-op.
+
+**Honest limits, not oversights:**
+- `networkType` is a **best-effort guess from interface names** (`wl*` → wifi, `eth*`/`en*` → ethernet), not a real OS API query — no portable API distinguishes Wi-Fi from Ethernet across Linux/Windows/Android/macOS without extra platform-specific work.
+- There is **no `ssid` field**. Reading the SSID needs platform-specific Wi-Fi APIs (nl80211 on Linux, `NEHotspotNetwork` on Apple platforms, WinRT on Windows) that no host implements yet.
+- `watchNetwork` has **no Apple-platform backend**: `if-addrs`'s `IfChangeNotifier` doesn't exist on macOS/iOS/tvOS/watchOS/visionOS. This project doesn't build for those today, so it isn't handled — a future macOS/iOS target will need a different watch backend here.
 
 ## HTTPS client options (CF.request / agapi.http)
 

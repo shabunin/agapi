@@ -43,14 +43,15 @@ cf-runtime may later *map* `CF.ipv4address` / `CF.startMonitoring` → `agapi.de
 | **T1++** | `mdns.browse` / `publish` | ✅ lab (Tauri / mdns-sd) |
 | **T2** | `stream` / backpressure / `drain` | ❌ |
 | **T3** | `fs` subset | ❌ planned |
-| **T4** | **platform device** (network status, sensors, props, NFC, notify, bio, haptics, camera, BT) | ❌ planned |
+| **T4** | **platform device** (network status, sensors, props, NFC, notify, bio, haptics, camera, BT) | 🟡 network status shipped (snapshot + watch, no `ssid` — see C1); rest ❌ planned |
 | **T4b** | `crypto` (stdlib façade) | ❌ browser Web Crypto in gallery only |
 
 Globals after `installStdlib` today:  
-**`agapi.{net,dgram,http,dns,tls,mdns,Buffer,process,host,version}`**.
+**`agapi.{net,dgram,http,dns,tls,mdns,device,Buffer,process,host,version}`**.
+`agapi.device` is `getNetworkStatus()` + `watchNetwork()` only so far — see C1.
 
 Planned additions (names may refine):  
-**`agapi.device`**, **`agapi.sensors`**, **`agapi.fs`**, **`agapi.nfc`**, **`agapi.notifications`**, **`agapi.biometric`**, **`agapi.haptics`**, **`agapi.crypto`**, later camera/bluetooth.
+**`agapi.sensors`**, **`agapi.fs`**, **`agapi.nfc`**, **`agapi.notifications`**, **`agapi.biometric`**, **`agapi.haptics`**, **`agapi.crypto`**, later camera/bluetooth. More `agapi.device` fields (battery, brightness, volume, identity — C2).
 
 ---
 
@@ -89,7 +90,7 @@ Planned additions (names may refine):
 
 | Gallery tool | Surface | Status |
 |--------------|---------|--------|
-| Sockets (NC) | `agapi.net` / `dgram` | live |
+| Sockets | `agapi.net` / `dgram` | live |
 | TLS client | `agapi.tls` | lab |
 | HTTP | `agapi.http.request` (+ browser `fetch()` toggle) | lab |
 | HTTP server | `agapi.http.createServer` | lab |
@@ -97,16 +98,18 @@ Planned additions (names may refine):
 | WebSocket client | `agapi.http.WebSocket` (+ browser `WebSocket` toggle) | lab |
 | DNS | `agapi.dns` | lab |
 | mDNS | `agapi.mdns` | lab |
-| Crypto | browser `crypto.subtle` | lab (not `agapi.crypto` yet) |
-| Camera / Bluetooth | host planned | stub |
+| Network status | `agapi.device.getNetworkStatus` / `watchNetwork` | lab |
+| OS info | `@tauri-apps/plugin-os` (direct, not `agapi.*` yet) | lab |
+| Bluetooth | host planned | stub |
+| Sensors | `agapi.sensors` | stub |
+| Haptics | `agapi.haptics` | stub |
+| Notifications | `agapi.notifications` | stub |
+| Filesystem | `agapi.fs` | stub |
+| NFC | `agapi.nfc` | stub |
+| Biometric | `agapi.biometric` | stub |
 | WebRTC / WebCodecs | browser | info |
-| **Network (device)** | `agapi.device` / network status | planned |
-| **Sensors** | `agapi.sensors` | planned |
-| **Device props** | `agapi.device` | planned |
-| **FS** | `agapi.fs` | planned |
-| **NFC** | `agapi.nfc` | planned |
-| **Notifications** | `agapi.notifications` | planned |
-| **Biometric** | `agapi.biometric` | planned |
+| Crypto | browser `crypto.subtle` | lab (not `agapi.crypto` yet) |
+| **Device props** (battery, brightness, volume, identity) | `agapi.device` | planned |
 | **Haptics** | `agapi.haptics` | planned |
 
 ### Phase C — Platform device APIs (**agapi**, not cf-runtime)
@@ -116,13 +119,14 @@ cf-runtime remains a thin adapter later (`CF.*` → `agapi.*`).
 
 #### C1 — Device network status (P0)
 
-| API (proposed) | Responsibility |
-|----------------|----------------|
-| `agapi.device.getNetworkStatus()` | snapshot: `hasNetwork`, IPv4/IPv6, masks, `networkType`, optional `ssid` |
-| `agapi.device.on('network', cb)` / watch/unwatch | connect / disconnect / address change |
-| fields or `status` object | single source of truth for scripts |
+| API | Status |
+|-----|--------|
+| `agapi.device.getNetworkStatus()` | ✅ shipped. Snapshot: `hasNetwork`, `networkType` (best-effort, by interface name), `addresses` (IPv4/IPv6 + netmask, per non-loopback interface) |
+| `agapi.device.watchNetwork(cb)` | ✅ shipped. Returns `Promise<{ stop() }>`; `cb` fires with a fresh snapshot on real Wi-Fi/Ethernet connect, disconnect, or address change. Backed by `if_addrs::IfChangeNotifier` (background OS thread, polls with a 1s timeout so `stop()` is cooperative, not forced) |
+| `ssid` field | ❌ not implemented — needs platform-specific Wi-Fi APIs (nl80211 / `NEHotspotNetwork` / WinRT), no host has one yet |
+| Apple platforms (macOS/iOS/…) | ❌ `watchNetwork` has no backend there — `IfChangeNotifier` doesn't exist on Apple targets and this project doesn't build for them today; a future macOS/iOS port needs a different watch mechanism |
 
-Host: interface enum (Rust), online path; SSID best-effort / platform-dependent.
+Host: `if_addrs::get_if_addrs()` (Rust, already a transitive dep via `mdns-sd`, now direct) — synchronous, no per-platform code needed for the snapshot.
 
 #### C2 — Device properties (P1)
 
@@ -196,9 +200,9 @@ Browser: `navigator.vibrate` fallback where present; mobile host preferred.
 
 Likely **host plugin** only; gallery stub until mobile host exists.
 
-#### C9 — Camera / Bluetooth (already in gallery stubs)
+#### C9 — Camera / Bluetooth
 
-Stay host-mobile scoped; façades under `agapi.camera` / `agapi.bluetooth` when implemented — still **not** cf-runtime.
+Stay host-mobile scoped; façades under `agapi.camera` / `agapi.bluetooth` when implemented — still **not** cf-runtime. Bluetooth has a gallery stub; camera's was pulled for now (no host plan yet) — re-add when there's an actual capability to stub against.
 
 #### C10 — Crypto façade (optional)
 
@@ -229,7 +233,7 @@ Otherwise framing stays in drivers / CF systems.
 agapi
 ├── net, dgram, http, dns, tls, mdns     # transport (shipped / lab)
 ├── Buffer, process, host, version
-├── device       # network status, battery, brightness, volume, identity  [planned]
+├── device       # getNetworkStatus()+watchNetwork() shipped; battery, brightness, volume, identity [planned]
 ├── sensors      # accel, gyro, attitude, heading, location               [planned]
 ├── fs           # scoped files                                           [planned]
 ├── nfc          # NDEF scan/write                                        [planned]
@@ -295,7 +299,7 @@ Missing host capability → clear error in façade (same pattern as `mdns` / `ht
 
 | Order | Branch (example) | Deliverable |
 |-------|------------------|-------------|
-| 1 | `feat/agapi-device-network` | network status + events + gallery |
+| 1 | `feat/agapi-device-network` | ✅ shipped: network status snapshot + watch + gallery |
 | 2 | `feat/agapi-device-battery` | battery + property events |
 | 3 | `feat/agapi-fs` | scoped read/write + gallery |
 | 4 | `feat/agapi-sensors` | accel/geo first, then gyro/attitude/heading |
@@ -331,3 +335,6 @@ Do **not** mix cf-runtime GUI changes into platform host PRs.
 | 2026-07-28 | Fixed a batch of net-stack bugs found by audit: TCP server `'connection'` emitted before the socket was registered (race), IPv6 UDP bind/connect/send (bare `SocketAddr::from_str` needs brackets), UDP option setters silently swallowing OS errors, double-bind/double-connect races on UDP/TCP sockets, mDNS `browse_start` id race, `mdns` `hostname_guess()` never reading the real OS hostname, unbounded HTTP server request body |
 | 2026-07-28 | Added, then **removed**, `installStdlib({ replaceFetch, replaceWebSocket })`: `replaceFetch` hung every `invoke()` call (Tauri's own IPC uses global `fetch()`, and `agapi.http.fetch` itself calls `invoke()` — infinite recursion, not fixable on our side). Dropped `replaceWebSocket` too for the same simple rule: stdlib never touches browser globals. Gallery's HTTP/WebSocket-client tools gained an explicit per-call toggle (`agapi.http.*` vs plain `fetch()`/`WebSocket`) instead |
 | 2026-07-28 | `npm run android:debug` / `android:install:debug` — build + install a debug APK in one step (tooling, not a stdlib surface) |
+| 2026-07-28 | **Phase C1 shipped:** `agapi.device.getNetworkStatus()` — snapshot (`hasNetwork`, best-effort `networkType`, non-loopback `addresses`) via `if_addrs::get_if_addrs()`. No `ssid` (needs platform-specific Wi-Fi APIs); gallery Network status tool added |
+| 2026-07-28 | **C1 watch shipped:** `agapi.device.watchNetwork(cb)` — background thread on `if_addrs::IfChangeNotifier`, emits a fresh snapshot per real change (spurious wakeups filtered internally). `async`-returning so a platform/permission failure rejects instead of silently no-op-ing. No Apple-platform backend (`IfChangeNotifier` doesn't exist there; not a build target today). Gallery tool got a Watch/Stop toggle + change log |
+| 2026-07-28 | Gallery regrouped into **Network** / **Device** / **Browser APIs** sections. Added OS info tool (direct `@tauri-apps/plugin-os` probe, not `agapi.*` yet) and gallery stubs for sensors/haptics/notifications/fs/nfc/biometric (previously "planned" rows with no UI). Pulled the camera stub for now — no host plan behind it. Dropped "NC"/"netcat" naming throughout (sockets tool, console header) — it read as a leftover from the original CF-tooling name, not a real distinction |
