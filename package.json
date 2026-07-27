@@ -18,6 +18,9 @@
     "tauri:android-tunnel": "adb -d reverse tcp:3000 tcp:3000 && tauri android dev --host 127.0.0.1",
     "build:windows": "tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis",
     "build:android": "tauri android build --apk",
+    "build:android:debug": "tauri android build --debug --apk",
+    "android:install:debug": "adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk",
+    "android:debug": "npm run build:android:debug && npm run android:install:debug",
     "version:bump": "tsx scripts/bump-version.ts",
     "release": "tsx scripts/release.ts"
   },
