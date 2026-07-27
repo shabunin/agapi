@@ -116,7 +116,10 @@ export class TauriMdnsHost implements MdnsHost {
           return;
         }
 
-        browseId = await invoke<string>('mdns_browse_start', { serviceType });
+        // Generate the id here so events emitted before the invoke resolves
+        // (the Rust browse thread starts immediately) are not dropped.
+        browseId = crypto.randomUUID();
+        await invoke<string>('mdns_browse_start', { serviceType, browseId });
         if (stopped) {
           stop();
         }

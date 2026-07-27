@@ -249,6 +249,13 @@ pub async fn tcp_listen<R: tauri::Runtime>(
                             let local_addr = stream.local_addr().ok();
                             let family = peer_addr.is_ipv4().then(|| "IPv4".to_string()).or_else(|| Some("IPv6".to_string()));
 
+                            // Register the socket BEFORE announcing it: a JS 'connection'
+                            // handler may synchronously write/destroy by client_id.
+                            let (client_tx, mut client_rx) = tokio::sync::mpsc::channel::<TcpCommand>(32);
+                            if let Some(state_mutex) = app_clone.try_state::<NetState>() {
+                                state_mutex.tcp_sockets.lock().await.insert(client_id.clone(), client_tx);
+                            }
+
                             let _ = app_clone.emit("plugin:net:tcpserver", NetEventPayload {
                                 id: id_clone.clone(),
                                 event: "connection".to_string(),
@@ -260,11 +267,6 @@ pub async fn tcp_listen<R: tauri::Runtime>(
                                 family,
                                 ..Default::default()
                             });
-
-                            let (client_tx, mut client_rx) = tokio::sync::mpsc::channel::<TcpCommand>(32);
-                            if let Some(state_mutex) = app_clone.try_state::<NetState>() {
-                                state_mutex.tcp_sockets.lock().await.insert(client_id.clone(), client_tx);
-                            }
                             
                             let app_clone_inner = app_clone.clone();
                             let client_id_clone = client_id.clone();

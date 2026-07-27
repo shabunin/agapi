@@ -136,14 +136,19 @@ fn emit_event<R: Runtime>(app: &AppHandle<R>, payload: MdnsEventPayload) {
 }
 
 /// Start browsing `serviceType` (e.g. `_http._tcp`). Returns browse session id.
+/// The caller supplies `browse_id` so it can filter events that may arrive
+/// before this command resolves (the browse thread emits immediately).
 #[tauri::command]
 pub fn mdns_browse_start<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, MdnsState>,
     service_type: String,
+    browse_id: Option<String>,
 ) -> Result<String, String> {
     let ty = normalize_service_type(&service_type)?;
-    let browse_id = Uuid::new_v4().to_string();
+    let browse_id = browse_id
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
 
     let receiver = with_daemon(&state, |d| {
         d.browse(&ty).map_err(|e| format!("browse: {e}"))
@@ -363,10 +368,13 @@ pub fn mdns_unpublish(
 }
 
 fn hostname_guess() -> String {
-    // Prefer OS hostname; fall back to agapi
-    std::env::var("HOSTNAME")
-        .or_else(|_| std::env::var("COMPUTERNAME"))
+    // Real OS hostname first — HOSTNAME/COMPUTERNAME env vars are usually
+    // not exported to GUI processes, so they're only a fallback.
+    hostname::get()
         .ok()
+        .and_then(|h| h.into_string().ok())
+        .or_else(|| std::env::var("HOSTNAME").ok())
+        .or_else(|| std::env::var("COMPUTERNAME").ok())
         .and_then(|h| {
             let h = h.trim();
             if h.is_empty() {

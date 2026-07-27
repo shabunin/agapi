@@ -17,6 +17,23 @@ pub struct UdpBindResult {
     pub family: String,
 }
 
+/// `"::1:9000"`-style strings don't parse as `SocketAddr` (IPv6 needs brackets),
+/// so build the address from parts instead of formatting a string.
+fn make_addr(host: &str, port: u16) -> Result<std::net::SocketAddr, String> {
+    host.parse::<std::net::IpAddr>()
+        .map(|ip| std::net::SocketAddr::new(ip, port))
+        .map_err(|e| format!("Invalid address {}: {}", host, e))
+}
+
+fn emit_udp_err<R: tauri::Runtime>(app: &AppHandle<R>, id: &str, e: impl ToString) {
+    let _ = app.emit("plugin:net:udp", NetEventPayload {
+        id: id.to_string(),
+        event: "error".to_string(),
+        error: Some(e.to_string()),
+        ..Default::default()
+    });
+}
+
 pub enum UdpCommand {
     Send(Vec<u8>, Option<String>, Option<u16>),
     Close,
@@ -54,8 +71,7 @@ pub async fn udp_bind<R: tauri::Runtime>(
     let h = host.unwrap_or_else(|| "0.0.0.0".to_string());
     let p = port.unwrap_or(0);
     
-    let addr_str = format!("{}:{}", h, p);
-    let socket_addr: std::net::SocketAddr = addr_str.parse().map_err(|e| format!("Invalid address: {}", e))?;
+    let socket_addr = make_addr(&h, p)?;
     
     let domain = match socket_addr {
         std::net::SocketAddr::V4(_) => socket2::Domain::IPV4,
@@ -156,7 +172,12 @@ pub async fn udp_bind<R: tauri::Runtime>(
                         Some(UdpCommand::Send(data, host_opt, port_opt)) => {
                             let dest_addr = match (host_opt, port_opt) {
                                 (Some(host), Some(port)) => {
-                                    Some(format!("{}:{}", host, port))
+                                    // IP literal → proper SocketAddr string (brackets IPv6);
+                                    // otherwise keep host:port for DNS resolution in send_to.
+                                    Some(match make_addr(&host, port) {
+                                        Ok(addr) => addr.to_string(),
+                                        Err(_) => format!("{}:{}", host, port),
+                                    })
                                 }
                                 _ => {
                                     connected_addr.map(|addr| addr.to_string())
@@ -183,11 +204,12 @@ pub async fn udp_bind<R: tauri::Runtime>(
                             }
                         }
                         Some(UdpCommand::SetBroadcast(flag)) => {
-                            let _ = socket.set_broadcast(flag);
+                            if let Err(e) = socket.set_broadcast(flag) {
+                                emit_udp_err(&app, &id_clone, e);
+                            }
                         }
                         Some(UdpCommand::Connect(host, port, resp_tx)) => {
-                            let addr_str = format!("{}:{}", host, port);
-                            match addr_str.parse::<std::net::SocketAddr>() {
+                            match make_addr(&host, port) {
                                 Ok(addr) => {
                                     connected_addr = Some(addr);
                                     let _ = resp_tx.send(Ok(()));
@@ -207,41 +229,49 @@ pub async fn udp_bind<R: tauri::Runtime>(
                             let _ = resp_tx.send(Ok(()));
                         }
                         Some(UdpCommand::AddMembership(multicast_addr, interface_opt)) => {
-                            match multicast_addr.parse::<std::net::IpAddr>() {
+                            let res = match multicast_addr.parse::<std::net::IpAddr>() {
                                 Ok(std::net::IpAddr::V4(addr)) => {
                                     let multi_if = interface_opt
                                         .and_then(|s| s.parse::<std::net::Ipv4Addr>().ok())
                                         .unwrap_or_else(|| std::net::Ipv4Addr::new(0, 0, 0, 0));
-                                    let _ = socket.join_multicast_v4(addr, multi_if);
+                                    socket.join_multicast_v4(addr, multi_if).map_err(|e| e.to_string())
                                 }
                                 Ok(std::net::IpAddr::V6(addr)) => {
                                     let if_index = interface_opt
                                         .and_then(|s| s.parse::<u32>().ok())
                                         .unwrap_or(0);
-                                    let _ = socket.join_multicast_v6(&addr, if_index);
+                                    socket.join_multicast_v6(&addr, if_index).map_err(|e| e.to_string())
                                 }
-                                Err(_) => {}
+                                Err(e) => Err(format!("Invalid multicast address {}: {}", multicast_addr, e)),
+                            };
+                            if let Err(e) = res {
+                                emit_udp_err(&app, &id_clone, e);
                             }
                         }
                         Some(UdpCommand::DropMembership(multicast_addr, interface_opt)) => {
-                            match multicast_addr.parse::<std::net::IpAddr>() {
+                            let res = match multicast_addr.parse::<std::net::IpAddr>() {
                                 Ok(std::net::IpAddr::V4(addr)) => {
                                     let multi_if = interface_opt
                                         .and_then(|s| s.parse::<std::net::Ipv4Addr>().ok())
                                         .unwrap_or_else(|| std::net::Ipv4Addr::new(0, 0, 0, 0));
-                                    let _ = socket.leave_multicast_v4(addr, multi_if);
+                                    socket.leave_multicast_v4(addr, multi_if).map_err(|e| e.to_string())
                                 }
                                 Ok(std::net::IpAddr::V6(addr)) => {
                                     let if_index = interface_opt
                                         .and_then(|s| s.parse::<u32>().ok())
                                         .unwrap_or(0);
-                                    let _ = socket.leave_multicast_v6(&addr, if_index);
+                                    socket.leave_multicast_v6(&addr, if_index).map_err(|e| e.to_string())
                                 }
-                                Err(_) => {}
+                                Err(e) => Err(format!("Invalid multicast address {}: {}", multicast_addr, e)),
+                            };
+                            if let Err(e) = res {
+                                emit_udp_err(&app, &id_clone, e);
                             }
                         }
                         Some(UdpCommand::SetTtl(ttl)) => {
-                            let _ = socket.set_ttl(ttl);
+                            if let Err(e) = socket.set_ttl(ttl) {
+                                emit_udp_err(&app, &id_clone, e);
+                            }
                         }
                         Some(UdpCommand::SetMulticastTtl(ttl)) => {
                             let _ = socket.set_multicast_ttl_v4(ttl);

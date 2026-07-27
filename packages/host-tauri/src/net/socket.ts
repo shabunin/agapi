@@ -130,7 +130,7 @@ export class TauriTcpSocket extends EventEmitter implements ITcpSocket {
     connect(options: any, connectionListener?: () => void): this;
     connect(path: string, connectionListener?: () => void): this;
     connect(portOrOptionsOrPath: any, hostOrCreateListener?: any, connectionListener?: () => void): this {
-        if (this.socketId) throw mapHostError('Socket already connected', { syscall: 'connect' });
+        if (this.socketId || this.connecting) throw mapHostError('Socket already connected', { syscall: 'connect' });
 
         let port = 0;
         let host = '127.0.0.1';

@@ -307,6 +307,9 @@ export class MockUdpSocket extends EventEmitter implements IUdpSocket {
     } else if (args.length === 2) {
       port = args[0];
       address = args[1];
+    } else if (args.length === 3) {
+      // send(msg, offset, length, port)
+      port = args[2];
     } else if (args.length === 4) {
       port = args[2];
       address = args[3];

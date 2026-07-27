@@ -36,6 +36,8 @@ function getMessageLength(msg: any): number {
 
 export class TauriUdpSocket extends EventEmitter {
     private socketId: string | null = null;
+    /** True while an (explicit or implicit) udp_bind invoke is in flight. */
+    private binding = false;
     private unlisten: UnlistenFn | null = null;
     private options: TauriUdpSocketOptions;
     
@@ -70,10 +72,12 @@ export class TauriUdpSocket extends EventEmitter {
     }
 
     bind(portOrOptions?: number | any, addressOrCallback?: string | (() => void), callback?: () => void): this {
-        if (this.socketId) throw new Error("Socket already bound");
+        if (this.socketId || this.binding) throw new Error("Socket already bound");
+        this.binding = true;
 
         let port = 0;
-        let address = '0.0.0.0';
+        const defaultAddress = this.options.type === 'udp6' ? '::' : '0.0.0.0';
+        let address = defaultAddress;
         let cb = callback;
 
         if (typeof portOrOptions === 'number') {
@@ -85,7 +89,7 @@ export class TauriUdpSocket extends EventEmitter {
             }
         } else if (typeof portOrOptions === 'object' && portOrOptions !== null) {
             port = portOrOptions.port || 0;
-            address = portOrOptions.address || '0.0.0.0';
+            address = portOrOptions.address || defaultAddress;
             if (typeof addressOrCallback === 'function') {
                 cb = addressOrCallback;
             }
@@ -103,6 +107,7 @@ export class TauriUdpSocket extends EventEmitter {
             sendBufferSize: this.options.sendBufferSize || null
         })
             .then(async (result) => {
+                this.binding = false;
                 this.socketId = result.id;
                 this.localAddress = result.local_address;
                 this.localPort = result.local_port;
@@ -126,6 +131,7 @@ export class TauriUdpSocket extends EventEmitter {
                 this.emit('listening');
             })
             .catch((err) => {
+                this.binding = false;
                 this.emit(
                     'error',
                     mapHostError(err, { syscall: 'bind', address, port })
@@ -189,10 +195,11 @@ export class TauriUdpSocket extends EventEmitter {
         const addr = address || (this.options.type === 'udp4' ? '127.0.0.1' : '::1');
         
         if (!this.socketId) {
-            // If not bound, bind to a random port first
-            this.bind(0, undefined, () => {
-                this.connect(port, addr, callback);
-            });
+            // If not bound, bind to a random port first;
+            // if a bind is already in flight, just wait for it.
+            const retry = () => this.connect(port, addr, callback);
+            if (this.binding) this.once('listening', retry);
+            else this.bind(0, undefined, retry);
             return;
         }
 
@@ -239,10 +246,11 @@ export class TauriUdpSocket extends EventEmitter {
 
     send(msg: any, ...args: any[]): void {
         if (!this.socketId) {
-            // Bind implicitly if send is called on unbound socket
-            this.bind(0, undefined, () => {
-                this.send(msg, ...args);
-            });
+            // Bind implicitly if send is called on unbound socket;
+            // if a bind is already in flight, just wait for it.
+            const retry = () => this.send(msg, ...args);
+            if (this.binding) this.once('listening', retry);
+            else this.bind(0, undefined, retry);
             return;
         }
 
@@ -362,11 +370,17 @@ export class TauriUdpSocket extends EventEmitter {
     close(callback?: () => void): this {
         if (this.socketId) {
             invoke('udp_close', { id: this.socketId })
-                .then(() => {
+                .catch(console.error)
+                .finally(() => {
+                    // Clean up (and emit 'close') even if the invoke rejected —
+                    // otherwise the Tauri listener leaks. The Rust 'close' event
+                    // usually loses the race with unlisten, so emit locally,
+                    // unless the event already got here and cleaned up first.
+                    const alreadyClosed = !this.socketId;
                     this.cleanup();
+                    if (!alreadyClosed) this.emit('close');
                     if (callback) callback();
-                })
-                .catch(console.error);
+                });
         } else {
             if (callback) setTimeout(callback, 0);
         }
