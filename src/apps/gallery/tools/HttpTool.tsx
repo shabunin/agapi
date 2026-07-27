@@ -2,17 +2,20 @@ import React, { useState } from 'react';
 import { Send } from 'lucide-react';
 import { http } from '@agapi/stdlib';
 import { ToolShell } from '../components/ToolShell';
+import { examplesFor } from '../examples';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const;
 
 /**
- * Mini Postman on agapi.http (host-backed in Tauri).
+ * HTTP client lab on agapi.http (host-backed in Tauri).
  */
 export default function HttpTool({ onBack }: { onBack: () => void }) {
   const [method, setMethod] = useState<(typeof METHODS)[number]>('GET');
   const [url, setUrl] = useState('https://httpbin.org/get');
   const [headersText, setHeadersText] = useState('{\n  "Accept": "application/json"\n}');
   const [body, setBody] = useState('');
+  /** false = accept invalid cert/hostname (default for local gear) */
+  const [rejectUnauthorized, setRejectUnauthorized] = useState(false);
   const [busy, setBusy] = useState(false);
   const [statusLine, setStatusLine] = useState('');
   const [respHeaders, setRespHeaders] = useState('');
@@ -41,6 +44,7 @@ export default function HttpTool({ onBack }: { onBack: () => void }) {
           url,
           method,
           headers,
+          rejectUnauthorized,
         },
         (res: any) => {
           const chunks: Uint8Array[] = [];
@@ -88,7 +92,13 @@ export default function HttpTool({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <ToolShell title="HTTP lab" surface="agapi.http.request" status="lab" onBack={onBack}>
+    <ToolShell
+      title="HTTP"
+      surface="agapi.http.request"
+      status="lab"
+      onBack={onBack}
+      examples={examplesFor('http')}
+    >
       <div className="p-4 max-w-3xl mx-auto space-y-4">
         <div className="flex flex-col sm:flex-row gap-2">
           <select
@@ -118,6 +128,21 @@ export default function HttpTool({ onBack }: { onBack: () => void }) {
             {busy ? 'Sending…' : 'Send'}
           </button>
         </div>
+
+        <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer p-3 rounded-xl bg-gray-900/50 border border-gray-800">
+          <input
+            type="checkbox"
+            checked={!rejectUnauthorized}
+            onChange={(e) => setRejectUnauthorized(!e.target.checked)}
+            className="rounded border-gray-600"
+          />
+          <span>
+            <span className="font-medium">Skip certificate verification</span>
+            <span className="block text-xs text-gray-500">
+              rejectUnauthorized: false — accept self-signed / hostname mismatch
+            </span>
+          </span>
+        </label>
 
         <label className="block text-xs text-gray-500">
           Headers (JSON object)
@@ -161,7 +186,8 @@ export default function HttpTool({ onBack }: { onBack: () => void }) {
         )}
 
         <p className="text-xs text-gray-600">
-          Needs Tauri host for real sockets. Browser mock install will error without HttpHost.
+          Needs Tauri. Skip verification only disables cert checks — not broken TLS
+          ciphers.
         </p>
       </div>
     </ToolShell>

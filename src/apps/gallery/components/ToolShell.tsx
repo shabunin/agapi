@@ -1,6 +1,8 @@
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
+import { CodeExamples } from './CodeExamples';
+import type { CodeSnippet } from '../examples';
 import type { ToolStatus } from '../types';
 
 export interface ToolShellProps {
@@ -11,9 +13,16 @@ export interface ToolShellProps {
   children: React.ReactNode;
   /** Optional extra header actions */
   actions?: React.ReactNode;
+  /**
+   * Self-doc code samples (tabs + copy).
+   * Shown in a collapsible panel under the header.
+   */
+  examples?: CodeSnippet[];
+  /** Start examples open (default true) */
+  examplesOpen?: boolean;
 }
 
-/** Shared chrome for gallery tools (except full-screen NC which has its own header). */
+/** Shared chrome for gallery tools — header, optional code examples, body. */
 export function ToolShell({
   title,
   surface,
@@ -21,6 +30,8 @@ export function ToolShell({
   onBack,
   children,
   actions,
+  examples,
+  examplesOpen = true,
 }: ToolShellProps) {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
@@ -44,6 +55,19 @@ export function ToolShell({
         </div>
         {actions}
       </header>
+
+      {examples && examples.length > 0 && (
+        <div className="shrink-0 border-b border-gray-800/80 bg-gray-950/80 px-3 sm:px-4 py-3">
+          <div className="max-w-3xl mx-auto">
+            <CodeExamples
+              snippets={examples}
+              defaultOpen={examplesOpen}
+              compact
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto">{children}</div>
     </div>
   );

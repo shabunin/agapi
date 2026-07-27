@@ -1,10 +1,17 @@
 import React from 'react';
 import { ToolShell } from '../components/ToolShell';
 import { StubPanel } from '../components/StubPanel';
+import { examplesFor } from '../examples';
 
 export default function CameraStub({ onBack }: { onBack: () => void }) {
   return (
-    <ToolShell title="Camera" surface="host mobile API (planned)" status="stub" onBack={onBack}>
+    <ToolShell
+      title="Camera"
+      surface="host mobile API (planned)"
+      status="stub"
+      onBack={onBack}
+      examples={examplesFor('camera')}
+    >
       <StubPanel
         title="Camera capture"
         roadmap={[

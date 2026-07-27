@@ -1,6 +1,7 @@
 import React from 'react';
 import { ToolShell } from '../components/ToolShell';
 import { StubPanel } from '../components/StubPanel';
+import { examplesFor } from '../examples';
 
 export default function BluetoothStub({ onBack }: { onBack: () => void }) {
   return (
@@ -9,6 +10,7 @@ export default function BluetoothStub({ onBack }: { onBack: () => void }) {
       surface="host mobile API (planned)"
       status="stub"
       onBack={onBack}
+      examples={examplesFor('bluetooth')}
     >
       <StubPanel
         title="Bluetooth / BLE"

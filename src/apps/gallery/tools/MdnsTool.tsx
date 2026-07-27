@@ -3,6 +3,7 @@ import { Radio, Square, Megaphone } from 'lucide-react';
 import { mdns, type MdnsService } from '@agapi/stdlib';
 import type { MdnsBrowseHandle, MdnsPublishHandle } from '@agapi/stdlib';
 import { ToolShell } from '../components/ToolShell';
+import { examplesFor } from '../examples';
 
 interface Row {
   key: string;
@@ -132,7 +133,13 @@ export default function MdnsTool({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <ToolShell title="mDNS" surface="agapi.mdns" status="lab" onBack={onBack}>
+    <ToolShell
+      title="mDNS"
+      surface="agapi.mdns"
+      status="lab"
+      onBack={onBack}
+      examples={examplesFor('mdns')}
+    >
       <div className="p-4 max-w-3xl mx-auto space-y-6">
         <section className="space-y-3 rounded-2xl border border-gray-800 bg-gray-900/40 p-4">
           <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">

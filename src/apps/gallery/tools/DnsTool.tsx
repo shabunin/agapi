@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 import { dns } from '@agapi/stdlib';
 import { ToolShell } from '../components/ToolShell';
+import { examplesFor } from '../examples';
 
 export default function DnsTool({ onBack }: { onBack: () => void }) {
   const [hostname, setHostname] = useState('example.com');
@@ -39,7 +40,13 @@ export default function DnsTool({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <ToolShell title="DNS lookup" surface="agapi.dns.lookup" status="lab" onBack={onBack}>
+    <ToolShell
+      title="DNS lookup"
+      surface="agapi.dns.lookup"
+      status="lab"
+      onBack={onBack}
+      examples={examplesFor('dns')}
+    >
       <div className="p-4 max-w-lg mx-auto space-y-4">
         <label className="block text-xs text-gray-500">
           Hostname

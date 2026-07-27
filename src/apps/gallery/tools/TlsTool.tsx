@@ -3,6 +3,7 @@ import { Eraser, Send, Shield } from 'lucide-react';
 import { tls, Buffer } from '@agapi/stdlib';
 import type { ITcpSocket } from '@agapi/stdlib';
 import { ToolShell } from '../components/ToolShell';
+import { examplesFor } from '../examples';
 
 export default function TlsTool({ onBack }: { onBack: () => void }) {
   const [host, setHost] = useState('example.com');
@@ -105,7 +106,13 @@ export default function TlsTool({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <ToolShell title="TLS client" surface="agapi.tls.connect" status="lab" onBack={onBack}>
+    <ToolShell
+      title="TLS client"
+      surface="agapi.tls.connect"
+      status="lab"
+      onBack={onBack}
+      examples={examplesFor('tls')}
+    >
       <div className="p-4 max-w-3xl mx-auto space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block text-xs text-gray-500">

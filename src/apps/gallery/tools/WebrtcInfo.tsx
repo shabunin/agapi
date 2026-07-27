@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ToolShell } from '../components/ToolShell';
 import { CapabilityTable, type CapRow } from '../components/CapabilityTable';
+import { examplesFor } from '../examples';
 
 function has(name: string): boolean {
   return typeof (globalThis as any)[name] !== 'undefined';
@@ -48,7 +49,13 @@ export default function WebrtcInfo({ onBack }: { onBack: () => void }) {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '—';
 
   return (
-    <ToolShell title="WebRTC" surface="browser WebRTC" status="info" onBack={onBack}>
+    <ToolShell
+      title="WebRTC"
+      surface="browser WebRTC"
+      status="info"
+      onBack={onBack}
+      examples={examplesFor('webrtc')}
+    >
       <div className="p-4 max-w-2xl mx-auto space-y-4">
         <p className="text-sm text-gray-400 leading-relaxed">
           Informational probe only — not a stdlib module yet. Use this page to see what the

@@ -15,6 +15,10 @@ const LABELS: Record<ToolStatus, string> = {
 };
 
 export function StatusBadge({ status }: { status: ToolStatus }) {
+  // 'live' / 'lab' badges were noise once most tools reached this stage —
+  // 'stub' / 'info' still carry real signal (not implemented / read-only probe).
+  if (status === 'live' || status === 'lab') return null;
+
   return (
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide border ${STYLES[status]}`}
