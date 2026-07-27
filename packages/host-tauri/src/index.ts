@@ -23,6 +23,7 @@ function createHttpHost(): HttpHost {
     request: tauriHttp.request,
     get: tauriHttp.get,
     WebSocketServer: tauriHttp.WebSocketServer,
+    WebSocket: tauriHttp.WebSocket,
   };
 }
 

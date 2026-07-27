@@ -14,6 +14,8 @@ export interface HttpHost {
   request(options: any, callback?: (res: any) => void): any;
   get(options: any, callback?: (res: any) => void): any;
   WebSocketServer?: new (options: { port: number }) => any;
+  /** MDN-compatible `WebSocket` client (outbound only). */
+  WebSocket?: new (url: string, protocols?: string | string[]) => any;
 }
 
 export interface DnsLookupOptions {

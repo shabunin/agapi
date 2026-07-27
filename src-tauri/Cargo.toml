@@ -30,7 +30,8 @@ tokio = { version = "1.52.3", features = ["full"] }
 uuid = { version = "1.20.0", features = ["v4"] }
 socket2 = { version = "0.5", features = ["all"] }
 axum = { version = "0.8.4", features = ["ws"] }
-reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls-webpki-roots"] }
+tauri-plugin-http = { version = "2", features = ["dangerous-settings", "unsafe-headers", "rustls-tls-webpki-roots"] }
+tauri-plugin-websocket = "2"
 bytes = "1.11.1"
 tokio-util = "0.7.18"
 futures-util = "0.3.32"
@@ -40,3 +41,4 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 webpki-roots = "0.26"
 rustls-pki-types = "1"
 mdns-sd = { version = "0.20", features = ["serde"] }
+hostname = "0.4"

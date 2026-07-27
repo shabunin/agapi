@@ -16,6 +16,8 @@
   ],
   "dependencies": {
     "@agapi/stdlib": "0.0.1",
-    "@tauri-apps/api": "^2.11.0"
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-http": "^2.5.9",
+    "@tauri-apps/plugin-websocket": "^2.4.2"
   }
 }

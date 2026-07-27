@@ -1,5 +1,4 @@
 pub mod server;
-pub mod client;
 
 use std::collections::HashMap;
 use std::sync::Arc;

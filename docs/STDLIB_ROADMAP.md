@@ -1,6 +1,6 @@
 # @agapi/stdlib roadmap
 
-Target: **Node-shaped APIs** for CF scripts, control protocols, and the **stdlib gallery** — not a full Node runtime.
+Target: **Node-shaped + platform APIs** for scripts, control protocols, drivers, and the **stdlib gallery** — not a full Node runtime and **not** CF GUI logic.
 
 Related: [COMPAT.md](./COMPAT.md) (behavior contract), [ARCHITECTURE.md](./ARCHITECTURE.md) (layers).
 
@@ -10,22 +10,26 @@ Related: [COMPAT.md](./COMPAT.md) (behavior contract), [ARCHITECTURE.md](./ARCHI
 
 | In scope | Out of scope |
 |----------|----------------|
-| TCP / UDP / HTTP / DNS / TLS façades | Full Node module matrix |
+| Transport: net / dgram / http / dns / tls / mdns | Full Node module matrix |
+| Platform device: network status, sensors, battery, … | CF joins / Pixi / GUI |
 | Buffer, process, EventEmitter, SystemError | `child_process`, workers |
-| Host-injectable backends (Tauri / mock) | Device drivers / Matter (separate packages) |
-| `window.agapi.*` for classic project scripts | GUI / CF / Pixi |
+| Host-injectable backends (Tauri / mock / browser probes) | Device **drivers** / Matter app logic (sibling packages) |
+| `window.agapi.*` for classic project scripts | CF-specific wrappers (those live in **cf-runtime**, thin) |
 
 ```
-gallery apps / drivers / CF scripts
+gallery / drivers / CF scripts
             │
-     window.agapi  /  import from '@agapi/stdlib'
+     window.agapi.*     ← installStdlib(host)
             │
-        @agapi/stdlib
+     @agapi/stdlib      ← public façades (Node-shaped + platform)
             │
-     host-tauri  /  mock
+     host-tauri / mock  ← no CF imports
             │
-          OS / Rust
+     OS / browser / Rust plugins
 ```
+
+**Hard rule:** platform capabilities are **`agapi.*` + host**, never implemented inside `@agapi/cf-runtime`.  
+cf-runtime may later *map* `CF.ipv4address` / `CF.startMonitoring` → `agapi.device.*` / `agapi.sensors.*`, but the real work is in stdlib/host.
 
 ---
 
@@ -35,23 +39,30 @@ gallery apps / drivers / CF scripts
 |------|---------|--------|
 | **T0** | `events`, `Buffer`, `process` (partial) | ✅ |
 | **T1** | `net`, `dgram`, `http` (+ host) | ✅ happy-path |
-| **T1+** | `dns.lookup`, `tls.connect` (client) | ✅ |
+| **T1+** | `dns.lookup`, `tls.connect` (client) | ✅ client only — server (`tls.createServer`, https server) ❌ planned, see Phase A |
 | **T1++** | `mdns.browse` / `publish` | ✅ lab (Tauri / mdns-sd) |
 | **T2** | `stream` / backpressure / `drain` | ❌ |
-| **T3** | `fs` subset | ❌ |
-| **T4** | mobile, media (camera / BT / WebRTC) | ❌ host + browser probes |
+| **T3** | `fs` subset | ❌ planned |
+| **T4** | **platform device** (network status, sensors, props, NFC, notify, bio, haptics, camera, BT) | ❌ planned |
+| **T4b** | `crypto` (stdlib façade) | ❌ browser Web Crypto in gallery only |
 
-Globals after `installStdlib`: **`agapi.{net,dgram,http,dns,tls,Buffer,process,host,version}`**.
+Globals after `installStdlib` today:  
+**`agapi.{net,dgram,http,dns,tls,mdns,Buffer,process,host,version}`**.
+
+Planned additions (names may refine):  
+**`agapi.device`**, **`agapi.sensors`**, **`agapi.fs`**, **`agapi.nfc`**, **`agapi.notifications`**, **`agapi.biometric`**, **`agapi.haptics`**, **`agapi.crypto`**, later camera/bluetooth.
 
 ---
 
 ## Development principles
 
 1. stdlib **never** imports `@tauri-apps/*`, CF, or Pixi.
-2. One PR ≈ one module or one behavior; update **COMPAT.md** with surface changes.
-3. Prefer fixing transport gaps (errors, timeouts, drain) over new modules “because Node has them”.
-4. Protocols (Matter, AV brands) live in **`@agapi/drivers`** (or sibling packages), not stdlib.
-5. Gallery apps validate features; they must not become the public API.
+2. host-tauri **never** imports CF / Pixi / joins.
+3. **cf-runtime** only *consumes* `@agapi/stdlib/*` — no OS IPC of its own for device APIs.
+4. One PR ≈ one module or one behavior; update **COMPAT.md** with surface changes.
+5. Prefer honest stubs + gallery **info/lab** over fake CF globals.
+6. Protocols (Matter, AV brands) live in **`@agapi/drivers`** (or sibling packages), not stdlib.
+7. Gallery validates features; it is not the public API.
 
 ---
 
@@ -59,132 +70,248 @@ Globals after `installStdlib`: **`agapi.{net,dgram,http,dns,tls,Buffer,process,h
 
 ### Phase A — Stabilize T1 / T1+ (current baseline)
 
-**Goal:** reliable sockets for CF systems and gallery tools.
+**Goal:** reliable sockets for systems, gallery, and drivers.
 
 | Item | Notes |
 |------|--------|
-| Error `code` matrix | `ECONNREFUSED`, `ETIMEDOUT`, `ENOTFOUND`, … consistent across host |
-| TCP `write` / `drain` (minimal) | stop silent buffer growth |
-| TLS polish | timeouts, clearer cert errors, ALPN as needed |
-| HTTP client timeouts / abort | gallery Postman + `CF.request` |
+| Error `code` matrix | `ECONNREFUSED`, `ETIMEDOUT`, `ENOTFOUND`, … |
+| TCP `write` / `drain` (minimal) | backpressure |
+| TLS / HTTP polish | timeouts, clearer errors, HTTPS options (`rejectUnauthorized`, `connectTimeout`, `maxRedirections`, `proxy`) |
+| `tls.createServer` (server-side TLS) | ❌ not started. `net/tls.rs` only has `rustls::ClientConfig` + `TlsConnector` today; server needs `rustls::ServerConfig` + `tokio_rustls::TlsAcceptor` wrapping a `TcpListener` (same rustls dep already in `Cargo.toml`, no new plugin — Tauri has no generic TLS-socket plugin, client or server) |
+| `http.createServer` over TLS (https server) | ❌ not started. `plugins/http/server.rs` is plain `TcpListener` + `axum::serve`, no TLS acceptor wrapped around it yet — same rustls building block as `tls.createServer` above |
 | Mock host parity | browser `npm run dev` stays useful |
 | Smoke tests | unit on mock; optional Tauri loopback |
-
-**Git:** `fix/stdlib-*`, `test/stdlib-*` — short-lived.
 
 ### Phase B — Gallery-driven verification
 
 **Goal:** interactive proof for every shipped surface.
 
-| Gallery tool | stdlib surface | Priority |
-|--------------|----------------|----------|
-| **Sockets (NC)** | `net` / `dgram` | ✅ exists → gallery entry |
-| **TLS client** | `tls.connect` | next |
-| **HTTP lab** (mini Postman) | `http.request` / `get` | next |
-| **DNS** | `dns.lookup` | next |
-| **mDNS** | `mdns` | lab (live tool) |
-| **Camera** | mobile / host API | stub |
-| **Bluetooth** | mobile / host API | stub |
-| **WebRTC** | browser + later host | info / capability page |
-| **WebCodecs** | browser | info / capability page |
+| Gallery tool | Surface | Status |
+|--------------|---------|--------|
+| Sockets (NC) | `agapi.net` / `dgram` | live |
+| TLS client | `agapi.tls` | lab |
+| HTTP lab | `agapi.http` | lab |
+| DNS | `agapi.dns` | lab |
+| mDNS | `agapi.mdns` | lab |
+| Crypto | browser `crypto.subtle` | lab (not `agapi.crypto` yet) |
+| Camera / Bluetooth | host planned | stub |
+| WebRTC / WebCodecs | browser | info |
+| **Network (device)** | `agapi.device` / network status | planned |
+| **Sensors** | `agapi.sensors` | planned |
+| **Device props** | `agapi.device` | planned |
+| **FS** | `agapi.fs` | planned |
+| **NFC** | `agapi.nfc` | planned |
+| **Notifications** | `agapi.notifications` | planned |
+| **Biometric** | `agapi.biometric` | planned |
+| **Haptics** | `agapi.haptics` | planned |
 
-App entry: shell launcher → **Stdlib Gallery** (`src/apps/gallery/`).  
-CF App stays a sibling product frontend, not inside the gallery.
+### Phase C — Platform device APIs (**agapi**, not cf-runtime)
 
-### Phase C — Discovery & host extras
+All of the following land as **stdlib façades + host capabilities**.  
+cf-runtime remains a thin adapter later (`CF.*` → `agapi.*`).
 
-| Capability | Package surface (proposed) | Host work |
-|------------|----------------------------|-----------|
-| mDNS browse / advertise | `agapi.mdns` or host-only plugin | Rust/Bonjour/Avahi |
-| Local network permissions | docs + gallery warnings | OS / mobile |
-| Crypto subset | `agapi.crypto` (random, hash) | only when drivers need it |
+#### C1 — Device network status (P0)
 
-Do **not** put Matter commissioning into stdlib; Matter may *use* mDNS + UDP + TCP from here.
+| API (proposed) | Responsibility |
+|----------------|----------------|
+| `agapi.device.getNetworkStatus()` | snapshot: `hasNetwork`, IPv4/IPv6, masks, `networkType`, optional `ssid` |
+| `agapi.device.on('network', cb)` / watch/unwatch | connect / disconnect / address change |
+| fields or `status` object | single source of truth for scripts |
+
+Host: interface enum (Rust), online path; SSID best-effort / platform-dependent.
+
+#### C2 — Device properties (P1)
+
+| Property | Notes |
+|----------|--------|
+| battery level + charge status | Battery Status API and/or OS |
+| screen brightness | get/set where OS allows |
+| sound volume | get (set optional) |
+| identity | model, name, uuid / machine id |
+
+Events: property change stream on `agapi.device` (not CF events in stdlib).
+
+#### C3 — Sensors (P1–P2)
+
+| Sensor | Typical backend |
+|--------|-----------------|
+| accelerometer | DeviceMotion / host |
+| gyroscope | DeviceMotion / host |
+| attitude | DeviceOrientation / host |
+| heading | compass / host |
+| location | Geolocation / host |
+
+API sketch: `agapi.sensors.start(type, options)` → handle with `stop()` + data events; `agapi.sensors.available()`.
+
+#### C4 — Filesystem subset **T3** (P1)
+
+Narrow **host** FS (not full POSIX Node `fs`):
+
+| Op | Use |
+|----|-----|
+| `readFile` / `writeFile` / `appendFile` | logs, config, cache |
+| `mkdir` / `readdir` / `stat` / `remove` | app data dir |
+| scoped roots | app data, cache, optional user-picked dir |
+
+No arbitrary whole-disk access without explicit picker/permission.
+
+#### C5 — Notifications (P2)
+
+| Op | Notes |
+|----|--------|
+| `agapi.notifications.requestPermission()` | OS / web |
+| `agapi.notifications.show({ title, body, … })` | local notify |
+| optional tap / dismiss events | host-dependent |
+
+#### C6 — Biometric (P2)
+
+| Op | Notes |
+|----|--------|
+| `agapi.biometric.isAvailable()` | face / fingerprint / none |
+| `agapi.biometric.authenticate({ reason })` | unlock / confirm action |
+
+Host-only on mobile/desktop OS; no pure-browser guarantee.
+
+#### C7 — Haptics (P2)
+
+| Op | Notes |
+|----|--------|
+| `agapi.haptics.impact(style?)` | light / medium / heavy |
+| `agapi.haptics.notification(type?)` | success / warning / error |
+| `agapi.haptics.selection()` | tick |
+
+Browser: `navigator.vibrate` fallback where present; mobile host preferred.
+
+#### C8 — NFC (P2–P3)
+
+| Op | Notes |
+|----|--------|
+| scan / session | NDEF read |
+| write (optional) | where OS allows |
+| availability | Android-first; iOS limited; desktop rare |
+
+Likely **host plugin** only; gallery stub until mobile host exists.
+
+#### C9 — Camera / Bluetooth (already in gallery stubs)
+
+Stay host-mobile scoped; façades under `agapi.camera` / `agapi.bluetooth` when implemented — still **not** cf-runtime.
+
+#### C10 — Crypto façade (optional)
+
+Gallery already probes browser Web Crypto. Later:
+
+- `agapi.crypto` thin wrapper (random, hash, hmac) for scripts  
+- Matter-grade AES-CCM stays in matter.js / drivers, not necessarily stdlib
 
 ### Phase D — Streams (T2) — only if needed
 
-Implement minimal Duplex / `drain` if:
-
-- third-party protocol code requires `.pipe()`, or  
-- backpressure becomes a real production issue.
-
-Otherwise keep framing in drivers (`data` → buffer → lines).
-
-### Phase E — Filesystem (T3) — only if needed
-
-Narrow host API: `readFile` / `writeFile` / `mkdir` for logs, cert cache, script config.  
-Not a POSIX `fs` clone.
+Minimal Duplex / `drain` if third-party code or production backpressure requires it.  
+Otherwise framing stays in drivers / CF systems.
 
 ### Explicit non-goals (long horizon)
 
-- `tls.createServer` / full HTTPS Agent  
+- Full Node `fs` / `crypto` / `child_process`  
+- Implementing device/sensors **inside** cf-runtime  
 - UDS / IPC paths  
 - `require()` module loader  
-- Exact Node `errno` numbers per OS  
-- Full WebRTC stack inside stdlib (probe first; integrate later if product needs it)
+- Exact Node `errno` matrix  
+- Full WebRTC stack inside stdlib  
 
 ---
 
-## Stdlib gallery (product shape)
+## Proposed `window.agapi` growth
 
 ```
-Launcher
-├── CF App              → @agapi/cf-runtime
-└── Stdlib Gallery      → React tools on @agapi/stdlib (+ browser probes)
-    ├── Sockets (NC)    net / dgram          [live]
-    ├── TLS client      tls                  [live / lab]
-    ├── HTTP lab        http                 [live / lab]
-    ├── DNS             dns                  [live / lab]
-    ├── mDNS            (planned)            [stub]
-    ├── Camera          (mobile)             [stub]
-    ├── Bluetooth       (mobile)             [stub]
-    ├── WebRTC          browser capabilities [info]
-    └── WebCodecs       browser capabilities [info]
+agapi
+├── net, dgram, http, dns, tls, mdns     # transport (shipped / lab)
+├── Buffer, process, host, version
+├── device       # network status, battery, brightness, volume, identity  [planned]
+├── sensors      # accel, gyro, attitude, heading, location               [planned]
+├── fs           # scoped files                                           [planned]
+├── nfc          # NDEF scan/write                                        [planned]
+├── notifications
+├── biometric
+├── haptics
+├── crypto       # optional thin WebCrypto/host wrapper                   [planned]
+├── camera / bluetooth   # mobile                                         [planned]
+└── drivers      # later install from @agapi/drivers
 ```
 
-### Tool lifecycle
+cf-runtime (later, thin):
 
-| Status | Meaning |
-|--------|---------|
-| `live` | Uses real stdlib host APIs (Tauri for full power) |
-| `lab` | Works when host provides capability; degrades with clear errors on mock |
-| `stub` | UI + roadmap text; no host API yet |
-| `info` | Feature-detect browser / runtime; no I/O |
-
-### Implementation map
-
-| Path | Role |
-|------|------|
-| `src/apps/gallery/GalleryApp.tsx` | hub + tool router |
-| `src/apps/gallery/tools/*` | one tool per feature |
-| `src/apps/NcApp.tsx` | Sockets tool (shared; opened from gallery) |
-| `docs/STDLIB_ROADMAP.md` | this file |
-
-When a stub becomes live: implement host + stdlib façade first, then swap the gallery tool; update COMPAT + this roadmap.
+```
+CF.ipv4address          ← agapi.device network snapshot
+CF.NetworkStatusChange  ← agapi.device events
+CF.startMonitoring      ← agapi.sensors
+CF.device.batteryLevel  ← agapi.device
+CF.setDeviceProperty    ← agapi.device.set(...)
+```
 
 ---
 
-## Suggested git branches
+## Implementation sketch (host binding)
 
-| Work | Branch |
-|------|--------|
-| TCP drain / errors | `fix/stdlib-tcp-backpressure` |
-| Gallery hub + rehome NC | `feat/stdlib-gallery` (this work) |
-| TLS / HTTP / DNS tools | can ship with gallery; polish via `feat/gallery-tls` etc. |
-| mDNS host | `feat/stdlib-mdns` + `feat/host-tauri-mdns` |
-| Mobile camera/BT | `feat/host-mobile-*` then gallery live tools |
+```ts
+// packages/stdlib/src/host.ts (conceptual)
+interface DeviceHost {
+  getNetworkStatus(): Promise<NetworkStatus>;
+  watchNetwork?(cb: (s: NetworkStatus) => void): () => void;
+  getBattery?(): Promise<BatteryStatus>;
+  // brightness / volume / identity …
+}
 
-Do not mix stdlib host changes with CF GUI refactors in one PR.
+interface SensorsHost { /* start/stop streams */ }
+interface FsHost { /* scoped paths */ }
+interface NfcHost { /* session */ }
+interface NotificationsHost { /* show / permission */ }
+interface BiometricHost { /* authenticate */ }
+interface HapticsHost { /* impact */ }
+
+interface AgapiHost {
+  net: NetHost;
+  http?: HttpHost;
+  dns?: DnsHost;
+  tls?: TlsHost;
+  mdns?: MdnsHost;
+  device?: DeviceHost;
+  sensors?: SensorsHost;
+  fs?: FsHost;
+  nfc?: NfcHost;
+  notifications?: NotificationsHost;
+  biometric?: BiometricHost;
+  haptics?: HapticsHost;
+}
+```
+
+Missing host capability → clear error in façade (same pattern as `mdns` / `http`).
+
+---
+
+## Suggested PR / branch order
+
+| Order | Branch (example) | Deliverable |
+|-------|------------------|-------------|
+| 1 | `feat/agapi-device-network` | network status + events + gallery |
+| 2 | `feat/agapi-device-battery` | battery + property events |
+| 3 | `feat/agapi-fs` | scoped read/write + gallery |
+| 4 | `feat/agapi-sensors` | accel/geo first, then gyro/attitude/heading |
+| 5 | `feat/agapi-notifications` | local notifications |
+| 6 | `feat/agapi-haptics` | vibrate / impact |
+| 7 | `feat/agapi-biometric` | auth prompt |
+| 8 | `feat/agapi-nfc` | mobile NDEF |
+| 9 | `feat/cf-bridge-device` | **only then** map CF.* → agapi (optional) |
+
+Do **not** mix cf-runtime GUI changes into platform host PRs.
 
 ---
 
 ## Success criteria
 
-- [ ] Every **live** COMPAT surface has a gallery tool (or explicit reason not to).
-- [ ] Mock browser still boots gallery without Tauri (tools show honest errors).
-- [ ] Tauri path exercises net/dgram/http/dns/tls from gallery without CF project.
-- [ ] New stdlib modules land with COMPAT row + gallery entry (`live` or `stub`).
-- [ ] Drivers / Matter depend only on stable T1+ surfaces until Phase C/D justify more.
+- [ ] Every live COMPAT surface has a gallery tool (or explicit opt-out).
+- [ ] Platform APIs work from gallery **without** loading a CF project.
+- [ ] cf-runtime has **zero** direct Tauri/device IPC for these features.
+- [ ] Mock browser: honest empty/unavailable, no fake “always Wi‑Fi”.
+- [ ] New modules: COMPAT row + `installStdlib` / `agapi.*` + gallery entry.
 
 ---
 
@@ -192,5 +319,7 @@ Do not mix stdlib host changes with CF GUI refactors in one PR.
 
 | Date | Note |
 |------|------|
-| 2026-07-26 | Initial roadmap + gallery plan (sockets → TLS → HTTP → DNS → mDNS → mobile/media stubs) |
-| 2026-07-26 | mDNS lab: Rust `mdns-sd`, `agapi.mdns`, gallery MdnsTool |
+| 2026-07-26 | Initial roadmap + gallery plan |
+| 2026-07-26 | mDNS lab shipped |
+| 2026-07-27 | Platform device plan: network/sensors/props/fs/nfc/notifications/biometric/haptics under **agapi** (not cf-runtime); gallery crypto (browser) noted |
+| 2026-07-27 | Noted TLS/HTTPS server gap (Phase A): both `tls.connect` and `http.createServer` are client-and-plain-only today; server-side TLS needs `rustls::ServerConfig` + `TlsAcceptor`, no official Tauri plugin covers either direction |

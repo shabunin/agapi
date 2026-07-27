@@ -21,7 +21,7 @@ Single namespace: **`window.agapi`** / **`globalThis.agapi`** (no top-level `win
 |------|--------|
 | `agapi.net` | TCP client/server |
 | `agapi.dgram` | UDP |
-| `agapi.http` | createServer / request / get / WebSocketServer |
+| `agapi.http` | createServer / request / get / WebSocketServer / WebSocket |
 | `agapi.dns` | `lookup` / `lookupAsync` |
 | `agapi.tls` | `connect` (client only) |
 | `agapi.mdns` | `browse` / `publish` (DNS-SD; Tauri host) |
@@ -122,6 +122,72 @@ const pub = await agapi.mdns.publish({
 Browse events: `started`, `found`, `resolved`, `removed`, `stopped`, `error`.  
 Multicast requires real network permissions (desktop LAN / mobile local-network entitlement).
 
+## HTTPS client options (CF.request / agapi.http)
+
+Backed by the official [`@tauri-apps/plugin-http`](https://v2.tauri.app/reference/javascript/http/)
+— no custom Rust HTTP client. `host-tauri`'s Node-shaped `http.request()` calls the
+plugin's `fetch()` under the hood and adapts the `Response` back into a Node-ish
+`IncomingMessage`. `rejectUnauthorized` on the JS side maps to the plugin's
+`danger` (`ClientOptions`) underneath. Defaults match local CF gear (relaxed
+verification — no SNI override; unlike `agapi.tls.connect`, this client has no
+per-request SNI option, since the official plugin doesn't have one).
+
+| Option | Meaning |
+|--------|---------|
+| `rejectUnauthorized: false` | **default** — accept invalid cert + hostname |
+| `rejectUnauthorized: true` | Verify cert against webpki roots + hostname |
+| `insecure: true` | Alias → `rejectUnauthorized: false` |
+| `connectTimeout` | ms, bounds the TCP+TLS connect phase |
+| `maxRedirections` | `0` disables redirects |
+| `proxy` | `{ all \| http \| https }`, each a URL or `{ url, basicAuth?, noProxy? }` |
+
+```js
+// Local IP, skip cert verification (default)
+agapi.http.request({
+  url: 'https://192.168.1.174:1843/xml/device_description.xml',
+  method: 'GET',
+  rejectUnauthorized: false,
+}, (res) => { /* … */ }).end();
+
+// CF.request options bag
+CF.request('https://192.168.1.174:1843/xml/device_description.xml', {
+  method: 'GET',
+  rejectUnauthorized: false,
+}, function (status, headers, body) {
+  CF.log(status, body);
+});
+```
+
+**Note:** `rejectUnauthorized: false` only disables **certificate verification**.  
+It does **not** fix “cannot decrypt peer's message” (cipher / TLS version / broken device stack). That needs a legacy TLS backend or plain HTTP.
+
+## WebSocket client (agapi.http.WebSocket)
+
+Browser-compatible [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
+(`readyState`, `onopen`/`onmessage`/`onerror`/`onclose`, `addEventListener`, `send`,
+`close`, `binaryType`), backed by the official
+[`@tauri-apps/plugin-websocket`](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/websocket).
+Outbound only — it dials out to a remote server, same as the browser API. For
+hosting a WebSocket *server* use `agapi.http.WebSocketServer` (unrelated, custom
+axum-based; no official Tauri plugin does that).
+
+```js
+const ws = new agapi.http.WebSocket('wss://echo.example.com');
+ws.binaryType = 'arraybuffer'; // default is 'blob', like real browsers
+ws.onopen = () => ws.send('hello');
+ws.onmessage = (ev) => console.log(ev.data);
+ws.onclose = (ev) => console.log('closed', ev.code, ev.reason);
+ws.onerror = (ev) => console.error('ws error', ev);
+// ws.close(1000, 'done');
+```
+
+Known gaps vs. the real API: `protocol` always reads back as `''` (the plugin's
+`connect()` only returns a connection id, not response headers, so the
+negotiated subprotocol can't be observed) and `bufferedAmount` is always `0`
+(no local write buffering — backpressure lives in the underlying Rust socket).
+Incoming `Ping` frames are answered with `Pong` transparently, matching real
+browsers (the plugin itself does not do this).
+
 ## Explicit non-goals (for now)
 
 - Duplex streams / `pipe` / real `drain`
@@ -130,6 +196,7 @@ Multicast requires real network permissions (desktop LAN / mobile local-network 
 - Full Node `Buffer` / encodings matrix
 - Exact `err.errno` numbers per OS
 - Client certs / custom CA files (can add later)
+- Legacy TLS 1.0 / obsolete cipher suites (rustls limitation)
 
 ## CF usage
 

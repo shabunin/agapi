@@ -36,6 +36,8 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_websocket::init())
         .invoke_handler(tauri::generate_handler![
             set_devtools, 
             is_devtools_open, 
@@ -77,7 +79,6 @@ pub fn run() {
             plugins::http::server::http_server_respond,
             plugins::http::server::ws_send_message,
             plugins::http::server::ws_close_connection,
-            plugins::http::client::http_client_request,
         ])
         .setup(|app| {
             plugins::net::init_state(app.handle());

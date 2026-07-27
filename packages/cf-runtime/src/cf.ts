@@ -391,17 +391,47 @@ export class CFAPI implements CFContext {
     };
     
     request = (...args: any[]) => {
-        // Overloads (per CF docs):
+        // Overloads (per CF docs + agapi TLS extras):
         //   1. (url, callback)
         //   2. (url, headers, callback)
         //   3. (url, method, headers, callback)
         //   4. (url, method, headers, body, callback)
         //   5. (url, method, headers, body, timeout, callback)  — timeout ignored
+        //   6. (url, options, callback)  — agapi: options may include method, headers, body,
+        //        rejectUnauthorized, insecure
         let url: string, method: string, headers: any, body: any, callback: any;
+        let tlsOptions: {
+            rejectUnauthorized?: boolean;
+            insecure?: boolean;
+        } | null = null;
+
         if (args.length === 2 && typeof args[1] === 'function') {
             // Form 1
             [url, callback] = args;
             method = 'GET'; headers = null; body = null;
+        } else if (
+            args.length === 3 &&
+            typeof args[2] === 'function' &&
+            typeof args[1] === 'object' &&
+            args[1] !== null &&
+            // options bag: has method/body/tls keys OR not a plain header map heuristic
+            (typeof args[1].method === 'string' ||
+                'body' in args[1] ||
+                'rejectUnauthorized' in args[1] ||
+                'insecure' in args[1] ||
+                'headers' in args[1])
+        ) {
+            // Form 6: (url, options, callback)
+            url = args[0];
+            callback = args[2];
+            const opt = args[1];
+            method = opt.method || 'GET';
+            headers = opt.headers ?? null;
+            body = opt.body ?? null;
+            tlsOptions = {
+                rejectUnauthorized: opt.rejectUnauthorized,
+                insecure: opt.insecure,
+            };
         } else if (args.length === 3 && typeof args[2] === 'function' && typeof args[1] === 'object') {
             // Form 2: (url, headers, callback)
             [url, headers, callback] = args;
@@ -414,11 +444,25 @@ export class CFAPI implements CFContext {
             // Form 4 / Form 5
             callback = args[args.length - 1];
             url = args[0]; method = args[1]; headers = args[2]; body = args[3];
+            // optional trailing options object before callback:
+            // (url, method, headers, body, tlsOptions, callback)
+            if (
+                args.length >= 6 &&
+                typeof args[4] === 'object' &&
+                args[4] !== null &&
+                typeof args[4] !== 'function'
+            ) {
+                const opt = args[4];
+                tlsOptions = {
+                    rejectUnauthorized: opt.rejectUnauthorized,
+                    insecure: opt.insecure,
+                };
+            }
         } else {
             console.warn('CF.request: unrecognized argument pattern', args);
             return;
         }
-        networkApi.request(this, url, method || 'GET', headers, body, callback);
+        networkApi.request(this, url, method || 'GET', headers, body, callback, tlsOptions);
     };
 
     runCommand = (systemName: string, command: string, data?: string, tokenContext?: any) => {

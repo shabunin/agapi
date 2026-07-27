@@ -36,12 +36,24 @@ export function getWebSocketServerCtor(): new (options: { port: number }) => any
   return Ctor;
 }
 
+/** Lazy host WebSocket (MDN-compatible client) constructor for `new http.WebSocket(url)`. */
+export function getWebSocketCtor(): new (url: string, protocols?: string | string[]) => any {
+  const Ctor = requireHttpHost().WebSocket;
+  if (!Ctor) {
+    throw new Error('@agapi/stdlib/http: WebSocket not provided by host');
+  }
+  return Ctor;
+}
+
 const http = {
   createServer,
   request,
   get,
   get WebSocketServer() {
     return getWebSocketServerCtor();
+  },
+  get WebSocket() {
+    return getWebSocketCtor();
   },
 };
 

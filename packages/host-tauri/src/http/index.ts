@@ -1,7 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { fetch as tauriFetch, type Proxy as HttpProxyConfig } from '@tauri-apps/plugin-http';
 import { EventEmitter } from '@agapi/stdlib/events';
 import { mapHostError } from '@agapi/stdlib/errors';
+import { AgapiWebSocket } from './websocket';
+
+export type { Proxy as HttpProxyConfig } from '@tauri-apps/plugin-http';
+export { AgapiWebSocket as WebSocket } from './websocket';
 
 export interface HttpRequestEvent {
     id: string;
@@ -26,6 +31,19 @@ export interface RequestOptions {
     port?: number;
     path?: string;
     headers?: Record<string, string>;
+    /**
+     * TLS: when `false` (default for local gear), accept invalid cert + hostname.
+     * When `true`, verify certificate and hostname. Maps to `ClientOptions.danger`.
+     */
+    rejectUnauthorized?: boolean;
+    /** Alias: `insecure: true` → `rejectUnauthorized: false` */
+    insecure?: boolean;
+    /** Connect-phase timeout in ms. Maps to `ClientOptions.connectTimeout`. */
+    connectTimeout?: number;
+    /** Maps to `ClientOptions.maxRedirections` (0 disables redirects). */
+    maxRedirections?: number;
+    /** Maps to `ClientOptions.proxy`. */
+    proxy?: HttpProxyConfig;
 }
 
 export class IncomingMessage extends EventEmitter {
@@ -223,25 +241,45 @@ export class ClientRequest extends EventEmitter {
             url = `${protocol}//${hostname}${port}${path}`;
         }
 
-        invoke('http_client_request', {
-            args: {
-                method: this.options.method || 'GET',
-                url,
-                headers: this.options.headers || {},
-                body: totalLength > 0 ? Array.from(finalBody) : null
-            }
-        }).then((res: any) => {
+        // TLS: default rejectUnauthorized false (local/self-signed gear).
+        let rejectUnauthorized = this.options.rejectUnauthorized;
+        if (this.options.insecure === true) {
+            rejectUnauthorized = false;
+        }
+        if (rejectUnauthorized === undefined) {
+            rejectUnauthorized = false;
+        }
+
+        tauriFetch(url, {
+            method: this.options.method || 'GET',
+            headers: this.options.headers || {},
+            body: totalLength > 0 ? finalBody : undefined,
+            danger: {
+                acceptInvalidCerts: !rejectUnauthorized,
+                acceptInvalidHostnames: !rejectUnauthorized,
+            },
+            connectTimeout: this.options.connectTimeout,
+            maxRedirections: this.options.maxRedirections,
+            proxy: this.options.proxy,
+        } as RequestInit).then(async (response) => {
+            const headers: Record<string, string> = {};
+            response.headers.forEach((v, k) => {
+                headers[k] = v;
+            });
+            const body = Array.from(new Uint8Array(await response.arrayBuffer()));
+
             const incoming = new IncomingMessage({
                 id: '',
                 port: 0,
                 method: '',
                 url: '',
-                headers: res.headers,
-                body: res.body
+                headers,
+                body
             });
             // We use IncomingMessage, but we also want a statusCode in Node compat
-            (incoming as any).statusCode = res.status;
-            
+            (incoming as any).statusCode = response.status;
+            (incoming as any).statusMessage = response.statusText;
+
             if (this.callback) {
                 this.callback(incoming);
             }
@@ -373,6 +411,8 @@ export class WebSocketServer extends EventEmitter {
                     conn._handleClose();
                 }
             });
+
+            this.emit('listening');
         } catch (error) {
             this.emit('error', new Error(String(error)));
         }
@@ -430,5 +470,6 @@ export default {
     ServerResponse,
     ClientRequest,
     WebSocketServer,
-    WebSocketConnection
+    WebSocketConnection,
+    WebSocket: AgapiWebSocket
 };

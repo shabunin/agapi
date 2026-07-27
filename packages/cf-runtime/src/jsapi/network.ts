@@ -15,13 +15,22 @@ export function send(
     }
 }
 
+/** Optional TLS / HTTP extras (agapi / CF.request options bag). */
+export interface CFRequestTlsOptions {
+    /** `false` (default): accept invalid cert + hostname. `true`: verify. */
+    rejectUnauthorized?: boolean;
+    /** Alias: true → rejectUnauthorized false */
+    insecure?: boolean;
+}
+
 export function request(
     ctx: CFContext,
     url: string,
     method: string,
     headers: any,
     body: any,
-    callback: CFCallback
+    callback: CFCallback,
+    tlsOptions?: CFRequestTlsOptions | null
 ) {
     console.log(`CF.request to ${url} with method ${method}`);
     
@@ -36,6 +45,15 @@ export function request(
                     method: method || 'GET',
                     headers: headers || {},
                 };
+
+                if (tlsOptions) {
+                    if (tlsOptions.rejectUnauthorized !== undefined) {
+                        requestOptions.rejectUnauthorized = tlsOptions.rejectUnauthorized;
+                    }
+                    if (tlsOptions.insecure !== undefined) {
+                        requestOptions.insecure = tlsOptions.insecure;
+                    }
+                }
                 
                 const req = http.request(requestOptions, (res) => {
                     const chunks: Uint8Array[] = [];
@@ -63,11 +81,11 @@ export function request(
                 req.on('error', (err) => {
                     const detail = (err && ((err as any).message || String(err))) || 'unknown';
                     console.error("Tauri request failed:", detail, err);
-                    if (callback) callback(0, {}, "Request failed");
+                    if (callback) callback(0, {}, detail || "Request failed");
                 });
                 
                 if (body) {
-                    if (typeof body === 'object') {
+                    if (typeof body === 'object' && !(body instanceof ArrayBuffer) && !ArrayBuffer.isView(body)) {
                         const searchParams = new URLSearchParams(body).toString();
                         if (!requestOptions.headers) requestOptions.headers = {};
                         requestOptions.headers['Content-Type'] = 'application/x-www-form-urlencoded';

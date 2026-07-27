@@ -12,9 +12,9 @@ Branch: `feat/stdlib-runtime`.
 
 ### Docs
 
-- [Architecture](docs/ARCHITECTURE.md)
+- [Architecture](docs/ARCHITECTURE.md) — layers; device APIs live in **agapi/host**, not cf-runtime
 - [stdlib COMPAT](docs/COMPAT.md)
-- [stdlib roadmap](docs/STDLIB_ROADMAP.md) (+ **Stdlib Gallery** app in the shell)
+- [stdlib roadmap](docs/STDLIB_ROADMAP.md) — transport + platform (network status, sensors, fs, nfc, notify, bio, haptics) + **Stdlib Gallery**
 
 ### Local
 
