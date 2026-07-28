@@ -638,15 +638,32 @@ if (granted) {
 
   fs: [
     {
-      id: 'fs-planned',
-      title: 'Planned shape',
-      description: 'Not implemented — docs only',
-      runnable: false,
-      code: `// FUTURE — scoped subset, not full Node fs
-// await agapi.fs.writeFile('cache/log.txt', 'hello');
-// const text = await agapi.fs.readFile('cache/log.txt', 'utf8');
+      id: 'fs-basic',
+      title: 'mkdir + write + read',
+      description: 'Scoped subset, not full Node fs — baseDir defaults to \'appData\'',
+      code: `await agapi.fs.mkdir('logs', { recursive: true });
+await agapi.fs.writeFile('logs/run.txt', 'started\\n');
+await agapi.fs.appendFile('logs/run.txt', 'still running\\n');
 
-console.log('agapi.fs is not available yet');`,
+const text = await agapi.fs.readTextFile('logs/run.txt');
+console.log(text);
+
+for (const entry of await agapi.fs.readdir('logs')) {
+  console.log(entry.name, entry.isDirectory ? 'dir' : 'file');
+}`,
+    },
+    {
+      id: 'fs-base-dirs',
+      title: 'Other base dirs',
+      description: 'appConfig / appLocalData / appCache / appLog / temp',
+      code: `await agapi.fs.writeFile('cache.json', '{}', { baseDir: 'appCache' });
+const exists = await agapi.fs.exists('cache.json', { baseDir: 'appCache' });
+console.log('exists', exists);
+
+const info = await agapi.fs.stat('cache.json', { baseDir: 'appCache' });
+console.log('size', info.size, 'mtime', info.mtime);
+
+await agapi.fs.remove('cache.json', { baseDir: 'appCache' });`,
     },
   ],
 

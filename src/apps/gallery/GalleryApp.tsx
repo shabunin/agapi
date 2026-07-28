@@ -43,7 +43,7 @@ import BluetoothStub from './tools/BluetoothStub';
 import SensorsStub from './tools/SensorsStub';
 import HapticsTool from './tools/HapticsTool';
 import NotificationsTool from './tools/NotificationsTool';
-import FsStub from './tools/FsStub';
+import FsTool from './tools/FsTool';
 import NfcTool from './tools/NfcTool';
 import BiometricTool from './tools/BiometricTool';
 import CryptoInfo from './tools/CryptoInfo';
@@ -154,7 +154,7 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
     return <NotificationsTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'fs') {
-    return <FsStub onBack={() => setTool('hub')} />;
+    return <FsTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'nfc') {
     return <NfcTool onBack={() => setTool('hub')} />;
