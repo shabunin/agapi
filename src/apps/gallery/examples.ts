@@ -611,30 +611,28 @@ console.log('agapi.sensors is not available yet');`,
 
   haptics: [
     {
-      id: 'haptics-planned',
-      title: 'Planned shape',
-      description: 'Not implemented — docs only',
-      runnable: false,
-      code: `// FUTURE
-// agapi.haptics.impact('medium');
-// agapi.haptics.notification('success');
-// agapi.haptics.selection();
-
-console.log('agapi.haptics is not available yet');`,
+      id: 'haptics-basic',
+      title: 'Impact / notification / selection',
+      description: 'Mobile host preferred; falls back to navigator.vibrate',
+      code: `await agapi.haptics.impact('medium');
+await agapi.haptics.notification('success');
+await agapi.haptics.selection();
+await agapi.haptics.vibrate(200);`,
     },
   ],
 
   notifications: [
     {
-      id: 'notifications-planned',
-      title: 'Planned shape',
-      description: 'Not implemented — docs only',
-      runnable: false,
-      code: `// FUTURE
-// await agapi.notifications.requestPermission();
-// await agapi.notifications.show({ title: 'agapi', body: 'hello' });
-
-console.log('agapi.notifications is not available yet');`,
+      id: 'notifications-basic',
+      title: 'Permission + show',
+      description: 'Works on desktop too, not just mobile',
+      code: `let granted = await agapi.notifications.isPermissionGranted();
+if (!granted) {
+  granted = (await agapi.notifications.requestPermission()) === 'granted';
+}
+if (granted) {
+  agapi.notifications.show({ title: 'agapi', body: 'hello' });
+}`,
     },
   ],
 
@@ -654,30 +652,33 @@ console.log('agapi.fs is not available yet');`,
 
   nfc: [
     {
-      id: 'nfc-planned',
-      title: 'Planned shape',
-      description: 'Not implemented — docs only',
-      runnable: false,
-      code: `// FUTURE — mobile host only (Android-first)
-// const tag = await agapi.nfc.scan();
-// console.log(tag.ndef);
+      id: 'nfc-scan-write',
+      title: 'Scan + write',
+      description: 'Mobile only (Android/iOS) — no host on desktop',
+      code: `if (await agapi.nfc.isAvailable()) {
+  const tag = await agapi.nfc.scan({ type: 'ndef' });
+  console.log(tag.id, tag.records);
 
-console.log('agapi.nfc is not available yet');`,
+  await agapi.nfc.write([agapi.nfc.uriRecord('https://tauri.app')], {
+    kind: { type: 'ndef' },
+  });
+} else {
+  console.log('NFC not available on this device');
+}`,
     },
   ],
 
   biometrics: [
     {
-      id: 'biometrics-planned',
-      title: 'Planned shape',
-      description: 'Not implemented — docs only',
-      runnable: false,
-      code: `// FUTURE
-// if (await agapi.biometric.isAvailable()) {
-//   await agapi.biometric.authenticate({ reason: 'Confirm it\\'s you' });
-// }
+      id: 'biometrics-basic',
+      title: 'Check + authenticate',
+      description: 'Mobile only (Android/iOS) — no host on desktop',
+      code: `const status = await agapi.biometric.checkStatus();
+console.log(status.isAvailable, status.biometryType);
 
-console.log('agapi.biometric is not available yet');`,
+if (status.isAvailable) {
+  await agapi.biometric.authenticate("Confirm it's you");
+}`,
     },
   ],
 

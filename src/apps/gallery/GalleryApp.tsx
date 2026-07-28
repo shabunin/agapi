@@ -41,11 +41,11 @@ import NetworkStatusTool from './tools/NetworkStatusTool';
 import OsInfoTool from './tools/OsInfoTool';
 import BluetoothStub from './tools/BluetoothStub';
 import SensorsStub from './tools/SensorsStub';
-import HapticsStub from './tools/HapticsStub';
-import NotificationsStub from './tools/NotificationsStub';
+import HapticsTool from './tools/HapticsTool';
+import NotificationsTool from './tools/NotificationsTool';
 import FsStub from './tools/FsStub';
-import NfcStub from './tools/NfcStub';
-import BiometricsStub from './tools/BiometricsStub';
+import NfcTool from './tools/NfcTool';
+import BiometricTool from './tools/BiometricTool';
 import CryptoInfo from './tools/CryptoInfo';
 import WebrtcInfo from './tools/WebrtcInfo';
 import WebcodecsInfo from './tools/WebcodecsInfo';
@@ -148,19 +148,19 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
     return <SensorsStub onBack={() => setTool('hub')} />;
   }
   if (tool === 'haptics') {
-    return <HapticsStub onBack={() => setTool('hub')} />;
+    return <HapticsTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'notifications') {
-    return <NotificationsStub onBack={() => setTool('hub')} />;
+    return <NotificationsTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'fs') {
     return <FsStub onBack={() => setTool('hub')} />;
   }
   if (tool === 'nfc') {
-    return <NfcStub onBack={() => setTool('hub')} />;
+    return <NfcTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'biometrics') {
-    return <BiometricsStub onBack={() => setTool('hub')} />;
+    return <BiometricTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'crypto') {
     return <CryptoInfo onBack={() => setTool('hub')} />;
