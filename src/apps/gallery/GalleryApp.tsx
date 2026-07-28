@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import {
   Activity,
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
   Network,
   Nfc,
   Plug,
+  Radar,
   Radio,
   ScanSearch,
   Server,
@@ -54,6 +55,10 @@ import WebcodecsInfo from './tools/WebcodecsInfo';
 import WebAnimationsTool from './tools/WebAnimationsTool';
 import GesturesTool from './tools/GesturesTool';
 
+// matter.js pulls in ~2MB of protocol/crypto code — lazy-load so it's only
+// fetched when someone actually opens this tool, not on every app boot.
+const MatterTool = lazy(() => import('./tools/MatterTool'));
+
 const ICONS: Record<Exclude<GalleryToolId, 'hub'>, LucideIcon> = {
   sockets: Radio,
   tls: Shield,
@@ -77,12 +82,14 @@ const ICONS: Record<Exclude<GalleryToolId, 'hub'>, LucideIcon> = {
   crypto: KeyRound,
   'web-animations': Sparkles,
   gestures: Hand,
+  matter: Radar,
 };
 
 const GROUP_LABEL: Record<GalleryGroup, string> = {
   network: 'Network',
   device: 'Device',
   browser: 'Browser APIs',
+  drivers: 'Drivers',
 };
 
 const ACCENT: Record<string, string> = {
@@ -183,6 +190,19 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
   if (tool === 'gestures') {
     return <GesturesTool onBack={() => setTool('hub')} />;
   }
+  if (tool === 'matter') {
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-500 text-sm">
+            Loading matter.js…
+          </div>
+        }
+      >
+        <MatterTool onBack={() => setTool('hub')} />
+      </Suspense>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -223,7 +243,7 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
           </p>
         </div>
 
-        {(['network', 'device', 'browser'] as const).map((group) => {
+        {(['network', 'device', 'browser', 'drivers'] as const).map((group) => {
           const tools = GALLERY_TOOLS.filter((t) => t.group === group);
           if (tools.length === 0) return null;
           return (

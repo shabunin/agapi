@@ -205,4 +205,15 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     accent: 'lime',
     group: 'browser',
   },
+
+  // ── Drivers ───────────────────────────────────────────────
+  {
+    id: 'matter',
+    title: 'Matter',
+    blurb: 'Real device discovery (mDNS) + commissioning (PASE/CASE) via matter.js, on top of agapi.dgram/agapi.device.',
+    surface: '@agapi/matterjs · @project-chip/matter.js',
+    status: 'lab',
+    accent: 'violet',
+    group: 'drivers',
+  },
 ];

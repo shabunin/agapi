@@ -40,6 +40,12 @@
       ],
       "@agapi/cf-runtime/*": [
         "packages/cf-runtime/src/*"
+      ],
+      "@agapi/matterjs": [
+        "packages/matterjs/src/index.ts"
+      ],
+      "@agapi/matterjs/*": [
+        "packages/matterjs/src/*"
       ]
     },
     "allowImportingTsExtensions": true,
@@ -51,6 +57,7 @@
     "demos",
     "src-tauri/target",
     "docs-for-agent",
-    "docs-iViewer-JavaScript-API"
+    "docs-iViewer-JavaScript-API",
+    "packages/matterjs/vendor"
   ]
 }

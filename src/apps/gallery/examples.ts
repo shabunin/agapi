@@ -41,7 +41,8 @@ export type ExampleToolId =
   | 'webcodecs'
   | 'crypto'
   | 'web-animations'
-  | 'gestures';
+  | 'gestures'
+  | 'matter';
 
 export const TOOL_EXAMPLES: Record<ExampleToolId, CodeSnippet[]> = {
   sockets: [
@@ -893,6 +894,56 @@ el.addEventListener('touchmove', (e) => {
 });
 
 console.log('handlers attached — two-finger scale/rotate, tracked by Touch.identifier');`,
+    },
+  ],
+
+  matter: [
+    {
+      id: 'matter-discover',
+      title: 'Discover',
+      description: 'Real API — needs a Matter device on the LAN to find anything',
+      runnable: false,
+      code: `import { createAgapiMatterController } from '@agapi/matterjs';
+import { Seconds } from '@matter/general';
+
+const controller = await createAgapiMatterController({
+  id: 'my-agapi-controller',
+  label: 'agapi',
+});
+
+const devices = await controller.discoverCommissionableDevices(
+  {}, // no filter — any commissionable device
+  { ble: false, onIpNetwork: true },
+  (device) => console.log('found', device.deviceIdentifier, device.DN),
+  Seconds(15),
+);
+console.log(\`discovered \${devices.length} device(s)\`);`,
+    },
+    {
+      id: 'matter-commission',
+      title: 'Commission',
+      description: "Real API — parses the device's printed manual pairing code",
+      runnable: false,
+      code: `import { ManualPairingCodeCodec } from '@matter/types';
+import type { NodeCommissioningOptions } from '@project-chip/matter.js';
+
+// e.g. "34970112332" from the device's label or QR code
+const { shortDiscriminator, passcode } = ManualPairingCodeCodec.decode(pairingCode);
+
+const options: NodeCommissioningOptions = {
+  discovery: {
+    identifierData: { shortDiscriminator },
+    discoveryCapabilities: { ble: false, onIpNetwork: true },
+  },
+  passcode,
+  commissioning: {
+    regulatoryLocation: 1, // Outdoor — most restrictive, safe default
+    regulatoryCountryCode: 'XX',
+  },
+};
+
+const nodeId = await controller.commissionNode(options);
+console.log('commissioned node', nodeId);`,
     },
   ],
 };
