@@ -23,7 +23,9 @@ export type GalleryToolId =
   | 'biometrics'
   | 'webrtc'
   | 'webcodecs'
-  | 'crypto';
+  | 'crypto'
+  | 'web-animations'
+  | 'gestures';
 
 export interface GalleryToolMeta {
   id: Exclude<GalleryToolId, 'hub'>;

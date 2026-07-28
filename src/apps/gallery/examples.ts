@@ -39,7 +39,9 @@ export type ExampleToolId =
   | 'biometrics'
   | 'webrtc'
   | 'webcodecs'
-  | 'crypto';
+  | 'crypto'
+  | 'web-animations'
+  | 'gestures';
 
 export const TOOL_EXAMPLES: Record<ExampleToolId, CodeSnippet[]> = {
   sockets: [
@@ -745,6 +747,152 @@ if (!hasVideoEncoder) {
   });
   console.log('vp8 supported', support.supported, support.config);
 }`,
+    },
+  ],
+  'web-animations': [
+    {
+      id: 'wa-bulb',
+      title: 'Flicker-on keyframes',
+      description: 'Multi-stop keyframes + easing, fill: forwards',
+      code: `const el = document.createElement('div');
+document.body.appendChild(el);
+
+const anim = el.animate(
+  [
+    { opacity: 0.35, filter: 'brightness(0.4)', offset: 0 },
+    { opacity: 1, filter: 'brightness(1.6)', offset: 0.55 },
+    { opacity: 1, filter: 'brightness(1)', offset: 1 },
+  ],
+  { duration: 450, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' },
+);
+
+anim.finished.then(() => {
+  console.log('bulb on');
+  el.remove();
+});`,
+    },
+    {
+      id: 'wa-playbackrate',
+      title: 'playbackRate',
+      description: 'Speed up a running Infinite animation without restarting it',
+      code: `const el = document.createElement('div');
+
+const anim = el.animate(
+  [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
+  { duration: 1000, iterations: Infinity, easing: 'linear' },
+);
+
+console.log('rate', anim.playbackRate); // 1
+anim.playbackRate = 2.5; // fan speeds up mid-spin, same effect, no restart
+console.log('rate now', anim.playbackRate);
+
+anim.cancel();`,
+    },
+    {
+      id: 'wa-stagger',
+      title: 'Staggered slats',
+      description: 'Per-element delay for a blinds-open effect',
+      code: `const slats = Array.from({ length: 6 }, () => document.createElement('div'));
+
+slats.forEach((slat, i) => {
+  slat.animate(
+    [{ transform: 'scaleY(1)' }, { transform: 'scaleY(0)' }],
+    { duration: 260, delay: i * 35, easing: 'ease-out', fill: 'forwards' },
+  );
+});
+
+console.log('opened', slats.length, 'slats, 35ms apart');`,
+    },
+    {
+      id: 'wa-flip',
+      title: 'FLIP reorder',
+      description: 'First/Last/Invert/Play — animate a reflow without recomputing layout mid-flight',
+      code: `const el = document.querySelector('.item')!;
+
+// FIRST: capture the rect before the DOM change
+const first = el.getBoundingClientRect();
+
+// (reorder / reflow happens here — e.g. a React state update)
+
+// LAST: capture the rect after
+const last = el.getBoundingClientRect();
+
+// INVERT: animate from the delta back to zero
+const dx = first.left - last.left;
+const dy = first.top - last.top;
+
+// PLAY
+el.animate(
+  [{ transform: \`translate(\${dx}px, \${dy}px)\` }, { transform: 'translate(0, 0)' }],
+  { duration: 340, easing: 'cubic-bezier(.2,.8,.2,1)' },
+);`,
+    },
+    {
+      id: 'wa-exit',
+      title: 'Exit before unmount',
+      description: 'Gate removal on the exit animation, not a setTimeout guess',
+      code: `function removeItem(el, onDone) {
+  const anim = el.animate(
+    [
+      { opacity: 1, transform: 'translateX(0)' },
+      { opacity: 0, transform: 'translateX(-16px)' },
+    ],
+    { duration: 200, easing: 'ease-in' },
+  );
+  anim.finished.then(onDone).catch(onDone); // rejects if canceled — still clean up
+}
+
+// removeItem(rowEl, () => rowEl.remove());`,
+    },
+  ],
+
+  gestures: [
+    {
+      id: 'gestures-tap-swipe',
+      title: 'Tap vs. swipe',
+      description: 'Same thresholds as packages/cf-runtime/src/components/Gestures.ts',
+      code: `const TAP_MOVE_THRESHOLD = 12; // px
+
+function swipeDirection(dx, dy) {
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+  if (absX < TAP_MOVE_THRESHOLD && absY < TAP_MOVE_THRESHOLD) return undefined;
+  return absX >= absY ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+}
+
+// release point relative to where the pointer went down:
+console.log(swipeDirection(2, 1));    // undefined → too small, counts as a tap
+console.log(swipeDirection(40, -5));  // 'right'
+console.log(swipeDirection(-3, 30));  // 'down'`,
+    },
+    {
+      id: 'gestures-pinch',
+      title: 'Pinch distance',
+      description: 'Two-finger scale/rotate from raw Touch Events — no library',
+      code: `function dist(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+function angleDeg(a, b) {
+  return Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX) * 180 / Math.PI;
+}
+
+const el = document.createElement('div');
+let start = null;
+
+el.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    const [a, b] = e.touches;
+    start = { dist: dist(a, b), angle: angleDeg(a, b) };
+  }
+});
+el.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2 && start) {
+    const [a, b] = e.touches;
+    console.log('scale', dist(a, b) / start.dist, 'rotate', angleDeg(a, b) - start.angle);
+  }
+});
+
+console.log('handlers attached — two-finger scale/rotate, tracked by Touch.identifier');`,
     },
   ],
 };

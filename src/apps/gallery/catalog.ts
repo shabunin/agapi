@@ -187,4 +187,22 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     accent: 'orange',
     group: 'browser',
   },
+  {
+    id: 'web-animations',
+    title: 'Web Animations',
+    blurb: '14 live examples — smart-home controls plus card/list/gallery patterns (FLIP reorder, lightbox, carousel, skeleton reveal).',
+    surface: 'Web Animations API (Element.animate)',
+    status: 'lab',
+    accent: 'pink',
+    group: 'browser',
+  },
+  {
+    id: 'gestures',
+    title: 'Gestures',
+    blurb: "cf-runtime's hand-rolled tap/pan/press/swipe, ported from Pixi to a Touch Events canvas — plus real multitouch pinch/rotate.",
+    surface: 'Touch Events API (no gesture library)',
+    status: 'lab',
+    accent: 'lime',
+    group: 'browser',
+  },
 ];

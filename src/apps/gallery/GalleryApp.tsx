@@ -9,6 +9,7 @@ import {
   Fingerprint,
   FolderOpen,
   Globe,
+  Hand,
   KeyRound,
   LayoutGrid,
   Network,
@@ -20,6 +21,7 @@ import {
   Share2,
   Shield,
   Signal,
+  Sparkles,
   Vibrate,
   Video,
   Wifi,
@@ -49,6 +51,8 @@ import BiometricTool from './tools/BiometricTool';
 import CryptoInfo from './tools/CryptoInfo';
 import WebrtcInfo from './tools/WebrtcInfo';
 import WebcodecsInfo from './tools/WebcodecsInfo';
+import WebAnimationsTool from './tools/WebAnimationsTool';
+import GesturesTool from './tools/GesturesTool';
 
 const ICONS: Record<Exclude<GalleryToolId, 'hub'>, LucideIcon> = {
   sockets: Radio,
@@ -71,6 +75,8 @@ const ICONS: Record<Exclude<GalleryToolId, 'hub'>, LucideIcon> = {
   webrtc: Network,
   webcodecs: Video,
   crypto: KeyRound,
+  'web-animations': Sparkles,
+  gestures: Hand,
 };
 
 const GROUP_LABEL: Record<GalleryGroup, string> = {
@@ -170,6 +176,12 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
   }
   if (tool === 'webcodecs') {
     return <WebcodecsInfo onBack={() => setTool('hub')} />;
+  }
+  if (tool === 'web-animations') {
+    return <WebAnimationsTool onBack={() => setTool('hub')} />;
+  }
+  if (tool === 'gestures') {
+    return <GesturesTool onBack={() => setTool('hub')} />;
   }
 
   return (
