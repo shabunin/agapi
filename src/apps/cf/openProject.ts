@@ -117,7 +117,7 @@ export async function openProjectNative(): Promise<ProjectAssets | null> {
     '@tauri-apps/plugin-fs'
   );
   const { dirname, join, tempDir } = await import('@tauri-apps/api/path');
-  const { convertFileSrc } = await import('@tauri-apps/api/core');
+  const { convertFileSrc, invoke } = await import('@tauri-apps/api/core');
 
   const selectedPath = await open({
     multiple: false,
@@ -125,6 +125,11 @@ export async function openProjectNative(): Promise<ProjectAssets | null> {
   });
 
   if (!selectedPath || typeof selectedPath !== 'string') return null;
+
+  // The fs plugin's static capability scope is app-dirs-only (see
+  // capabilities/default.json); a user can pick a project from anywhere,
+  // so grant runtime read access to just this path + its folder.
+  await invoke('fs_allow_read_path', { path: selectedPath });
 
   if (selectedPath.toLowerCase().endsWith('.zip')) {
     const fileData = await readFile(selectedPath);

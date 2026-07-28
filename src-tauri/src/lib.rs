@@ -30,6 +30,28 @@ fn resize_window(app: tauri::AppHandle, width: f64, height: f64) {
     }
 }
 
+/// Grant runtime fs-scope read access to a user-picked file (e.g. from
+/// `@tauri-apps/plugin-dialog`'s `open()`) plus its containing directory,
+/// recursively — so opening a CF project from anywhere on disk keeps
+/// working now that the static capability scope is narrowed to app dirs
+/// (see capabilities/default.json). The fs plugin ORs this runtime scope
+/// with the static ACL scope on every call (tauri-plugin-fs's
+/// `resolve_path`), so this only ever *adds* access to this one path, never
+/// removes the app-dir scope.
+#[tauri::command]
+fn fs_allow_read_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_fs::FsExt;
+    let scope = app.fs_scope();
+    let p = std::path::PathBuf::from(&path);
+    scope.allow_file(&p).map_err(|e| e.to_string())?;
+    if let Some(parent) = p.parent() {
+        scope
+            .allow_directory(parent, true)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -40,9 +62,10 @@ pub fn run() {
         .plugin(tauri_plugin_websocket::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
-            set_devtools, 
-            is_devtools_open, 
+            set_devtools,
+            is_devtools_open,
             resize_window,
+            fs_allow_read_path,
             plugins::net::tcp::tcp_connect,
             plugins::net::tcp::tcp_write,
             plugins::net::tcp::tcp_destroy,
