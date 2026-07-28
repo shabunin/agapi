@@ -1,8 +1,8 @@
 import { Container } from 'pixi.js';
+import { animate } from 'motion';
 import { CFNode } from '../parser';
-import { CFRenderer } from '../renderer';
+import { CFRenderer, killTweensOf, trackAnimation } from '../renderer';
 import { joinStore } from '../joinStore';
-import gsap from 'gsap';
 
 export function renderSubpage(
     node: CFNode,
@@ -26,8 +26,8 @@ export function renderSubpage(
         const ease2 = node.attributes.ease2;
 
         const animateSubpage = (isVisible: boolean, instant: boolean = false) => {
-            gsap.killTweensOf(subCont);
-            gsap.killTweensOf(subCont.scale);
+            killTweensOf(subCont);
+            killTweensOf(subCont.scale);
 
             if (instant) {
                 subCont.visible = isVisible;
@@ -83,10 +83,10 @@ export function renderSubpage(
 
 function applyTransition(target: Container, isEntry: boolean, transition: string, subtype: string, time: number, easeStr: string, renderer: CFRenderer): Promise<void> {
     return new Promise((resolve) => {
-        let ease = "none";
-        if (easeStr === "easeIn") ease = "power2.in";
-        else if (easeStr === "easeOut") ease = "power2.out";
-        else if (easeStr === "easeInOut") ease = "power2.inOut";
+        let ease: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' = "linear";
+        if (easeStr === "easeIn") ease = "easeIn";
+        else if (easeStr === "easeOut") ease = "easeOut";
+        else if (easeStr === "easeInOut") ease = "easeInOut";
 
         target.alpha = 1;
         target.x = 0;
@@ -136,15 +136,21 @@ function applyTransition(target: Container, isEntry: boolean, transition: string
             target.scale.set(fromProps.scaleX, fromProps.scaleY);
         }
 
-        const tweenProps: any = { duration: time, ease, onComplete: resolve };
-        if (toProps.x !== undefined) tweenProps.x = toProps.x;
-        if (toProps.y !== undefined) tweenProps.y = toProps.y;
-        if (toProps.alpha !== undefined) tweenProps.alpha = toProps.alpha;
-        
-        gsap.to(target, tweenProps);
-        
-        if (toProps.scaleX !== undefined) {
-            gsap.to(target.scale, { x: toProps.scaleX, y: toProps.scaleY, duration: time, ease });
+        const props: Record<string, number> = {};
+        if (toProps.x !== undefined) props.x = toProps.x;
+        if (toProps.y !== undefined) props.y = toProps.y;
+        if (toProps.alpha !== undefined) props.alpha = toProps.alpha;
+
+        if (Object.keys(props).length > 0) {
+            trackAnimation(target, animate(target, props, { duration: time, ease }));
         }
+        if (toProps.scaleX !== undefined) {
+            trackAnimation(target.scale, animate(target.scale, { x: toProps.scaleX, y: toProps.scaleY }, { duration: time, ease }));
+        }
+
+        // "scale"-only transitions leave `props` empty — resolve on a plain
+        // timer instead of an animation's onComplete so this promise still
+        // settles after `time` seconds either way.
+        setTimeout(resolve, time * 1000);
     });
 }

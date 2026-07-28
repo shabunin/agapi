@@ -15,7 +15,7 @@ export type {
   CFNode,
 } from './parser';
 
-export { CFRenderer } from './renderer';
+export { CFRenderer, stopAllAnimations } from './renderer';
 export { CFAPI } from './cf';
 export { joinStore, normalizeJoinString } from './joinStore';
 export { TokenEngine } from './tokenEngine';

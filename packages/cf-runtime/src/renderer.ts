@@ -1,6 +1,6 @@
 import { Application, Container, Sprite, Text, Graphics, Assets, TextStyle, Color, NineSliceSprite, Rectangle } from 'pixi.js';
 import { Slider, FancyButton, ScrollBox } from '@pixi/ui';
-import gsap from 'gsap';
+import { animate, type AnimationPlaybackControlsWithThen } from 'motion';
 import { CFProject, CFNode, CFTheme, CFSubpage } from './parser';
 import { joinStore, normalizeJoinString } from './joinStore';
 
@@ -14,6 +14,37 @@ import { renderText } from './components/Text';
 import { renderVideo } from './components/Video';
 import { renderWeb } from './components/Web';
 import { bindGestures } from './components/Gestures';
+
+// Pixi containers/points aren't DOM, so there's no WAAPI/getAnimations() to lean
+// on for "stop whatever is currently animating this" or "stop everything on
+// teardown" — track it ourselves, same as GSAP did internally.
+const activeAnimations = new Set<AnimationPlaybackControlsWithThen>();
+const animsByTarget = new WeakMap<object, Set<AnimationPlaybackControlsWithThen>>();
+
+export function trackAnimation<T extends object>(target: T, a: AnimationPlaybackControlsWithThen) {
+  activeAnimations.add(a);
+  let set = animsByTarget.get(target);
+  if (!set) animsByTarget.set(target, (set = new Set()));
+  set.add(a);
+  const untrack = () => {
+    activeAnimations.delete(a);
+    set!.delete(a);
+  };
+  a.finished.then(untrack, untrack);
+  return a;
+}
+
+/** Stop whatever is currently animating this target (container, or its .scale point). */
+export function killTweensOf(target: object) {
+  animsByTarget.get(target)?.forEach((a) => a.stop());
+  animsByTarget.delete(target);
+}
+
+/** Stop everything — call before tearing down/reloading a project. */
+export function stopAllAnimations() {
+  activeAnimations.forEach((a) => a.stop());
+  activeAnimations.clear();
+}
 
 export class CFRenderer {
   app: Application;
@@ -312,10 +343,10 @@ export class CFRenderer {
       }
       this.nodesMap[join] = activeContainers;
 
-      let ease = "none";
-      if (curve === "easein") ease = "power2.in";
-      else if (curve === "easeout") ease = "power2.out";
-      else if (curve === "easeinout") ease = "power2.inOut";
+      let ease: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' = "linear";
+      if (curve === "easein") ease = "easeIn";
+      else if (curve === "easeout") ease = "easeOut";
+      else if (curve === "easeinout") ease = "easeInOut";
 
       activeContainers.forEach(c => {
         const targetProps: any = {};
@@ -333,9 +364,11 @@ export class CFRenderer {
         let yScaleTarget = change.yscale !== undefined ? change.yscale : (change.scale !== undefined ? change.scale : undefined);
 
         if (duration > 0 || delay > 0) {
-          gsap.to(c, { ...targetProps, duration: duration, delay: delay, ease });
-          if (xScaleTarget !== undefined) gsap.to(c.scale, { x: xScaleTarget, duration, delay, ease });
-          if (yScaleTarget !== undefined) gsap.to(c.scale, { y: yScaleTarget, duration, delay, ease });
+          if (Object.keys(targetProps).length > 0) {
+            trackAnimation(c, animate(c, targetProps, { duration, delay, ease }));
+          }
+          if (xScaleTarget !== undefined) trackAnimation(c.scale, animate(c.scale, { x: xScaleTarget }, { duration, delay, ease }));
+          if (yScaleTarget !== undefined) trackAnimation(c.scale, animate(c.scale, { y: yScaleTarget }, { duration, delay, ease }));
         } else {
           if (targetProps.angle !== undefined) c.angle = targetProps.angle;
           if (targetProps.alpha !== undefined) c.alpha = targetProps.alpha;
@@ -953,16 +986,14 @@ export class CFRenderer {
       this.app.stage.addChild(newContainer);
       this.layoutDebugLabels(newContainer);
 
-      gsap.killTweensOf(old);
-      gsap.to(old, {
-        alpha: 0, duration: 0.3, onComplete: () => {
-          if (!old.destroyed) {
-            this.app.stage.removeChild(old);
-            old.destroy({ children: true });
-          }
+      killTweensOf(old);
+      trackAnimation(old, animate(old, { alpha: 0 }, { duration: 0.3 })).finished.then(() => {
+        if (!old.destroyed) {
+          this.app.stage.removeChild(old);
+          old.destroy({ children: true });
         }
-      });
-      gsap.to(newContainer, { alpha: 1, duration: 0.3 });
+      }, () => {});
+      trackAnimation(newContainer, animate(newContainer, { alpha: 1 }, { duration: 0.3 }));
     } else {
       this.app.stage.addChild(newContainer);
       this.layoutDebugLabels(newContainer);

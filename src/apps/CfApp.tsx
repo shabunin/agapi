@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Application, Assets } from 'pixi.js';
-import gsap from 'gsap';
 import { Upload, AlertCircle, FolderOpen, RefreshCw } from 'lucide-react';
 import {
   loadProject,
   joinStore,
+  stopAllAnimations,
   type CFProject,
   type CFRenderer,
   type RuntimeMenu,
@@ -112,7 +112,7 @@ export default function CfApp({ onBack }: CfAppProps) {
       window.removeEventListener('pagehide', stopNetwork);
       window.removeEventListener('beforeunload', stopNetwork);
       stopNetwork();
-      gsap.globalTimeline.clear();
+      stopAllAnimations();
       try {
         menuRef.current?.destroy();
       } catch {

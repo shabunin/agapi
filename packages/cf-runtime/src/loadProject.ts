@@ -1,7 +1,6 @@
 import { Application } from 'pixi.js';
-import gsap from 'gsap';
 import { parseGUI, type CFProject } from './parser';
-import { CFRenderer } from './renderer';
+import { CFRenderer, stopAllAnimations } from './renderer';
 import { CFAPI } from './cf';
 import { joinStore } from './joinStore';
 import {
@@ -100,7 +99,7 @@ export async function loadProject(options: LoadProjectOptions): Promise<LoadProj
 
   const project = await parseGUI(guiXml);
 
-  gsap.globalTimeline.clear();
+  stopAllAnimations();
 
   if (options.previousRenderer) {
     options.app?.stage.removeChildren();

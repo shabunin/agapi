@@ -18,11 +18,11 @@
   "dependencies": {
     "@agapi/stdlib": "0.0.1",
     "@pixi/ui": "^2.3.2",
-    "gsap": "^3.15.0",
+    "motion": "^12.23.24",
     "pixi.js": "^8.18.1"
   },
   "peerDependencies": {
     "pixi.js": "^8.0.0",
-    "gsap": "^3.0.0"
+    "motion": "^12.0.0"
   }
 }
