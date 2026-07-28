@@ -131,6 +131,8 @@ export default function MatterTool({ onBack }: { onBack: () => void }) {
   const [settingColorEndpoint, setSettingColorEndpoint] = useState<number | null>(null);
   const [levelPickers, setLevelPickers] = useState<Record<number, number>>({});
   const [settingLevelEndpoint, setSettingLevelEndpoint] = useState<number | null>(null);
+  const [windowTimeout, setWindowTimeout] = useState('900');
+  const [openingWindow, setOpeningWindow] = useState<string | null>(null);
 
   const pushLog = (line: string) => setLog((prev) => [...prev.slice(-60), line]);
 
@@ -356,6 +358,45 @@ export default function MatterTool({ onBack }: { onBack: () => void }) {
     }
   };
 
+  /**
+   * Adds a second admin (e.g. a phone's Matter app) to a device we already
+   * commissioned, without touching our own fabric — this is the real
+   * "multi-admin" flow every ecosystem's "share device" button uses. Once
+   * commissioned, a device closes its commissioning window (no more
+   * _matterc._udp advertisement — that's a security feature, not a bug),
+   * so a second controller can't discover it until an *already-connected*
+   * admin (us) explicitly reopens one via AdministratorCommissioning.
+   *
+   * Basic reuses the device's original fixed passcode (same code printed on
+   * it / used the first time) — simplest, but means whoever you hand it to
+   * gets the permanent code. Enhanced generates a fresh one-time
+   * passcode+discriminator instead, better if you don't want to hand out
+   * the permanent one.
+   */
+  const openCommissioningWindow = async (nodeId: PairedNodeDetails['nodeId'], enhanced: boolean) => {
+    const controller = controllerRef.current;
+    if (!controller) return;
+    const key = String(nodeId);
+    const timeoutSeconds = parseInt(windowTimeout, 10) || 900;
+    setOpeningWindow(key);
+    pushLog(`opening ${enhanced ? 'enhanced' : 'basic'} commissioning window for node ${nodeId} (${timeoutSeconds}s)…`);
+    try {
+      const node = await controller.getNode(nodeId);
+      if (enhanced) {
+        const { manualPairingCode } = await node.openEnhancedCommissioningWindow(timeoutSeconds);
+        pushLog(`enhanced window open (${timeoutSeconds}s) — new pairing code for the second admin: ${manualPairingCode}`);
+      } else {
+        await node.openBasicCommissioningWindow(timeoutSeconds);
+        pushLog(`basic window open (${timeoutSeconds}s) — reuse the original pairing code on the second admin`);
+      }
+    } catch (e: any) {
+      pushLog(`open commissioning window failed → ${describeError(e)}`);
+      console.error('[MatterTool] open commissioning window failed', e);
+    } finally {
+      setOpeningWindow(null);
+    }
+  };
+
   const uncommission = async (nodeId: PairedNodeDetails['nodeId']) => {
     const controller = controllerRef.current;
     if (!controller) return;
@@ -526,32 +567,62 @@ export default function MatterTool({ onBack }: { onBack: () => void }) {
             {commissionedNodes.map((n) => {
               const key = String(n.nodeId);
               const busy = uncommissioning.has(key);
+              const windowBusy = openingWindow === key;
               return (
-                <div
-                  key={key}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-gray-800 bg-gray-800/50 px-3 py-1.5 text-xs text-gray-300"
-                >
-                  <div className="min-w-0 truncate">
-                    <span className="font-mono">{key}</span>
-                    {n.advertisedName && <span className="text-gray-500"> · "{n.advertisedName}"</span>}
-                    {n.operationalAddress && <span className="text-gray-600"> · {n.operationalAddress}</span>}
+                <div key={key} className="rounded-lg border border-gray-800 bg-gray-800/50 px-3 py-2 text-xs text-gray-300 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 truncate">
+                      <span className="font-mono">{key}</span>
+                      {n.advertisedName && <span className="text-gray-500"> · "{n.advertisedName}"</span>}
+                      {n.operationalAddress && <span className="text-gray-600"> · {n.operationalAddress}</span>}
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        disabled={connecting}
+                        onClick={() => connect(n.nodeId)}
+                        className="px-2.5 py-1 rounded-md bg-violet-600/80 hover:bg-violet-600 disabled:opacity-50 text-[11px] font-medium"
+                      >
+                        {connecting && connectedNodeId === null ? 'Connecting…' : 'Connect'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => uncommission(n.nodeId)}
+                        className="px-2.5 py-1 rounded-md border border-rose-800 text-rose-300 hover:bg-rose-900/40 disabled:opacity-50 text-[11px] font-medium"
+                      >
+                        {busy ? 'Uncommissioning…' : 'Uncommission'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-500 shrink-0">Add 2nd admin (e.g. phone):</span>
+                    <input
+                      type="number"
+                      min={60}
+                      value={windowTimeout}
+                      onChange={(e) => setWindowTimeout(e.target.value)}
+                      className="w-16 rounded-md bg-gray-950 border border-gray-800 px-1.5 py-1 text-[11px] font-mono"
+                      title="Commissioning window timeout, seconds"
+                    />
+                    <span className="text-gray-600 shrink-0">s</span>
                     <button
                       type="button"
-                      disabled={connecting}
-                      onClick={() => connect(n.nodeId)}
-                      className="px-2.5 py-1 rounded-md bg-violet-600/80 hover:bg-violet-600 disabled:opacity-50 text-[11px] font-medium"
+                      disabled={windowBusy}
+                      onClick={() => openCommissioningWindow(n.nodeId, false)}
+                      className="px-2 py-1 rounded-md border border-sky-800 text-sky-300 hover:bg-sky-900/40 disabled:opacity-50 text-[11px] font-medium"
+                      title="Reopen pairing using the original passcode"
                     >
-                      {connecting && connectedNodeId === null ? 'Connecting…' : 'Connect'}
+                      {windowBusy ? '…' : 'Basic'}
                     </button>
                     <button
                       type="button"
-                      disabled={busy}
-                      onClick={() => uncommission(n.nodeId)}
-                      className="px-2.5 py-1 rounded-md border border-rose-800 text-rose-300 hover:bg-rose-900/40 disabled:opacity-50 text-[11px] font-medium"
+                      disabled={windowBusy}
+                      onClick={() => openCommissioningWindow(n.nodeId, true)}
+                      className="px-2 py-1 rounded-md border border-sky-800 text-sky-300 hover:bg-sky-900/40 disabled:opacity-50 text-[11px] font-medium"
+                      title="Reopen pairing using a freshly generated passcode"
                     >
-                      {busy ? 'Uncommissioning…' : 'Uncommission'}
+                      {windowBusy ? '…' : 'Enhanced (new code)'}
                     </button>
                   </div>
                 </div>
