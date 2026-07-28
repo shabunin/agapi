@@ -43,7 +43,7 @@ cf-runtime may later *map* `CF.ipv4address` / `CF.startMonitoring` → `agapi.de
 | **T1++** | `mdns.browse` / `publish` | ✅ lab (Tauri / mdns-sd) |
 | **T2** | `stream` / backpressure / `drain` | ❌ |
 | **T3** | `fs` subset | ✅ lab. Scoped to app data/config/cache/log dirs + temp (`fs:allow-app-*-recursive`), not whole-disk |
-| **T4** | **platform device** (network status, sensors, props, NFC, notify, bio, haptics, camera, BT) | 🟡 network status (C1), notifications (C5), biometric (C6, mobile-only), haptics (C7, mobile + browser fallback), NFC (C8, mobile-only) shipped; sensors/device-props/camera/BT ❌ planned |
+| **T4** | **platform device** (network status, sensors, props, NFC, notify, bio, haptics, camera, BT) | 🟡 network status (C1), notifications (C5), biometric (C6, mobile-only), haptics (C7, mobile + browser fallback), NFC (C8, mobile-only) shipped; sensors/device-props/camera/BT ⏸ blocked — no official Tauri plugin for any of these yet, see C2/C3/C9 |
 | **T4b** | `crypto` (stdlib façade) | ❌ browser Web Crypto in gallery only |
 
 Globals after `installStdlib` today:  
@@ -51,7 +51,8 @@ Globals after `installStdlib` today:
 `agapi.device` is `getNetworkStatus()` + `watchNetwork()` only so far (see C1). `agapi.biometric`/`agapi.nfc` are **mobile-only** (Android/iOS — not compiled into desktop builds at all); `agapi.haptics` has a mobile host + `navigator.vibrate` browser fallback; `agapi.notifications` and `agapi.fs` work everywhere.
 
 Planned additions (names may refine):  
-**`agapi.sensors`**, **`agapi.crypto`**, later camera/bluetooth. More `agapi.device` fields (battery, brightness, volume, identity — C2).
+**`agapi.sensors`**, **`agapi.crypto`**, later camera/bluetooth. More `agapi.device` fields (battery, brightness, volume, identity — C2).  
+⏸ **C2 (device props), C3 (sensors), and bluetooth (C9) are blocked**: no official `@tauri-apps/plugin-*` covers any of these today, and rolling a custom Rust/host implementation isn't a current priority. Re-check the official Tauri plugin list periodically — pick these back up once an official plugin lands.
 
 ---
 
@@ -100,8 +101,8 @@ Planned additions (names may refine):
 | mDNS | `agapi.mdns` | lab |
 | Network status | `agapi.device.getNetworkStatus` / `watchNetwork` | lab |
 | OS info | `@tauri-apps/plugin-os` (direct, not `agapi.*` yet) | lab |
-| Bluetooth | host planned | stub |
-| Sensors | `agapi.sensors` | stub |
+| Bluetooth | host ⏸ blocked (no official plugin) | stub |
+| Sensors | `agapi.sensors` | ⏸ blocked (no official plugin) |
 | Haptics | `agapi.haptics` | lab (mobile host + browser `navigator.vibrate` fallback) |
 | Notifications | `agapi.notifications` | lab (desktop + mobile) |
 | Filesystem | `agapi.fs` | lab |
@@ -109,8 +110,7 @@ Planned additions (names may refine):
 | Biometric | `agapi.biometric` | lab (**mobile only**) |
 | WebRTC / WebCodecs | browser | info |
 | Crypto | browser `crypto.subtle` | lab (not `agapi.crypto` yet) |
-| **Device props** (battery, brightness, volume, identity) | `agapi.device` | planned |
-| **Haptics** | `agapi.haptics` | planned |
+| **Device props** (battery, brightness, volume, identity) | `agapi.device` | ⏸ blocked (no official plugin) |
 
 ### Phase C — Platform device APIs (**agapi**, not cf-runtime)
 
@@ -128,7 +128,7 @@ cf-runtime remains a thin adapter later (`CF.*` → `agapi.*`).
 
 Host: `if_addrs::get_if_addrs()` (Rust, already a transitive dep via `mdns-sd`, now direct) — synchronous, no per-platform code needed for the snapshot.
 
-#### C2 — Device properties (P1)
+#### C2 — Device properties (P1) — ⏸ blocked, no official plugin
 
 | Property | Notes |
 |----------|--------|
@@ -139,7 +139,9 @@ Host: `if_addrs::get_if_addrs()` (Rust, already a transitive dep via `mdns-sd`, 
 
 Events: property change stream on `agapi.device` (not CF events in stdlib).
 
-#### C3 — Sensors (P1–P2)
+**Blocked (2026-07-28):** no official `@tauri-apps/plugin-*` exposes battery/brightness/volume/identity today. Writing a custom Rust host for this isn't a priority right now — periodically re-check the official Tauri plugin registry and revisit once one exists.
+
+#### C3 — Sensors (P1–P2) — ⏸ blocked, no official plugin
 
 | Sensor | Typical backend |
 |--------|-----------------|
@@ -150,6 +152,8 @@ Events: property change stream on `agapi.device` (not CF events in stdlib).
 | location | Geolocation / host |
 
 API sketch: `agapi.sensors.start(type, options)` → handle with `stop()` + data events; `agapi.sensors.available()`.
+
+**Blocked (2026-07-28):** no official `@tauri-apps/plugin-*` covers motion/orientation/compass/location sensors today. Custom host isn't a priority right now — periodically re-check the official Tauri plugin registry and revisit once one exists.
 
 #### C4 — Filesystem subset **T3** (P1) — ✅ shipped
 
@@ -225,9 +229,11 @@ Official `@tauri-apps/plugin-nfc` — **Android/iOS only**. `scanType`/`options`
 loosely typed (`any`) in `NfcHost` — the upstream `ScanKind`/`TechKind`/`NFCRecord` tree is
 fairly deep and not worth re-declaring for a facade this thin.
 
-#### C9 — Camera / Bluetooth
+#### C9 — Camera / Bluetooth — ⏸ blocked, no official plugin
 
 Stay host-mobile scoped; façades under `agapi.camera` / `agapi.bluetooth` when implemented — still **not** cf-runtime. Bluetooth has a gallery stub; camera's was pulled for now (no host plan yet) — re-add when there's an actual capability to stub against.
+
+**Blocked (2026-07-28):** no official `@tauri-apps/plugin-*` for Bluetooth (or camera) today. Custom host isn't a priority right now — periodically re-check the official Tauri plugin registry and revisit once one exists.
 
 #### C10 — Crypto façade (optional)
 
@@ -258,15 +264,15 @@ Otherwise framing stays in drivers / CF systems.
 agapi
 ├── net, dgram, http, dns, tls, mdns     # transport (shipped / lab)
 ├── Buffer, process, host, version
-├── device       # getNetworkStatus()+watchNetwork() shipped; battery, brightness, volume, identity [planned]
-├── sensors      # accel, gyro, attitude, heading, location               [planned]
+├── device       # getNetworkStatus()+watchNetwork() shipped; battery, brightness, volume, identity [blocked — no official plugin]
+├── sensors      # accel, gyro, attitude, heading, location               [blocked — no official plugin]
 ├── fs           # scoped files (app data/config/cache/log + temp)        [shipped]
 ├── nfc          # NDEF scan/write — mobile only (Android/iOS)            [shipped]
 ├── notifications # permission + show + onAction — desktop + mobile       [shipped]
 ├── biometric    # checkStatus + authenticate — mobile only               [shipped]
 ├── haptics      # impact/notification/selection/vibrate — mobile + browser vibrate fallback [shipped]
 ├── crypto       # optional thin WebCrypto/host wrapper                   [planned]
-├── camera / bluetooth   # mobile                                         [planned]
+├── camera / bluetooth   # mobile                                         [blocked — no official plugin]
 └── drivers      # later install from @agapi/drivers
 ```
 
@@ -325,9 +331,9 @@ Missing host capability → clear error in façade (same pattern as `mdns` / `ht
 | Order | Branch (example) | Deliverable |
 |-------|------------------|-------------|
 | 1 | `feat/agapi-device-network` | ✅ shipped: network status snapshot + watch + gallery |
-| 2 | `feat/agapi-device-battery` | battery + property events |
+| 2 | `feat/agapi-device-battery` | ⏸ blocked — battery + property events, no official Tauri plugin yet |
 | 3 | `feat/agapi-fs` | ✅ shipped: scoped read/write/mkdir/readdir/stat/remove/exists + capability tightening + gallery |
-| 4 | `feat/agapi-sensors` | accel/geo first, then gyro/attitude/heading |
+| 4 | `feat/agapi-sensors` | ⏸ blocked — accel/geo first, then gyro/attitude/heading, no official Tauri plugin yet |
 | 5 | `feat/agapi-notifications` | ✅ shipped: permission + show + onAction + gallery |
 | 6 | `feat/agapi-haptics` | ✅ shipped: vibrate/impact/notification/selection + browser fallback + gallery |
 | 7 | `feat/agapi-biometric` | ✅ shipped: checkStatus + authenticate (mobile-only) + gallery |
@@ -364,4 +370,5 @@ Do **not** mix cf-runtime GUI changes into platform host PRs.
 | 2026-07-28 | **C1 watch shipped:** `agapi.device.watchNetwork(cb)` — background thread on `if_addrs::IfChangeNotifier`, emits a fresh snapshot per real change (spurious wakeups filtered internally). `async`-returning so a platform/permission failure rejects instead of silently no-op-ing. No Apple-platform backend (`IfChangeNotifier` doesn't exist there; not a build target today). Gallery tool got a Watch/Stop toggle + change log |
 | 2026-07-28 | Gallery regrouped into **Network** / **Device** / **Browser APIs** sections. Added OS info tool (direct `@tauri-apps/plugin-os` probe, not `agapi.*` yet) and gallery stubs for sensors/haptics/notifications/fs/nfc/biometric (previously "planned" rows with no UI). Pulled the camera stub for now — no host plan behind it. Dropped "NC"/"netcat" naming throughout (sockets tool, console header) — it read as a leftover from the original CF-tooling name, not a real distinction |
 | 2026-07-28 | **C5-C8 shipped:** `agapi.notifications` (`@tauri-apps/plugin-notification`, desktop+mobile), `agapi.biometric` and `agapi.nfc` (mobile-only — Android/iOS, not compiled into desktop builds at all: `target.'cfg(android/ios)'.dependencies` in `Cargo.toml`), `agapi.haptics` (mobile host + `navigator.vibrate` browser fallback in the stdlib facade). Verified real permission defaults from each plugin's own `permissions/default.toml` rather than trusting doc summaries — `haptics` has **no** default set at all (every `allow-*` must be listed explicitly), `os:default`/`biometric:default`/`nfc:default` exclude hostname/write respectively. New `capabilities/mobile.json` (`platforms: ["android","iOS"]`) holds the mobile-only permissions so desktop capabilities stay clean. Sensors/fs/Bluetooth gallery stubs unchanged (still genuinely not implemented) |
+| 2026-07-28 | **C2/C3/C9 marked blocked:** device properties (battery/brightness/volume/identity), sensors (accel/gyro/attitude/heading/location), and Bluetooth have no official `@tauri-apps/plugin-*` today. User decision: don't roll custom Rust hosts for these — not a priority. Periodically re-check the official Tauri plugin registry and revisit once one lands. Camera stays pulled (no host plan) |
 | 2026-07-28 | **C4 shipped:** `agapi.fs` on official `@tauri-apps/plugin-fs` — `readFile`/`readTextFile`/`writeFile`/`appendFile`/`mkdir`/`readdir`/`stat`/`remove`/`exists`, scoped via `baseDir` (appData/appConfig/appLocalData/appCache/appLog/temp). Found (by reading the plugin's own `permissions/*.toml`, not docs) that `capabilities/default.json` had `fs:read-all`/`fs:write-all` — genuinely unrestricted whole-disk access, not the narrower allowlist entries sitting next to them. User chose to tighten immediately: narrowed to `fs:allow-app-*-recursive` + `fs:allow-temp-write-recursive`, and added a new `fs_allow_read_path` Rust command (`AppHandle::fs_scope()`) so the CF project-open picker can still grant runtime read access to an arbitrary user-picked path without widening the static ACL — relies on `tauri-plugin-fs::resolve_path` ORing the static scope with this runtime scope. Gallery `fs` stub replaced with a real read/write/mkdir/readdir/stat/remove lab |
