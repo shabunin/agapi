@@ -43,3 +43,9 @@ rustls-pki-types = "1"
 mdns-sd = { version = "0.20", features = ["serde"] }
 hostname = "0.4"
 if-addrs = "0.15"
+tauri-plugin-notification = "2"
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-biometric = "2"
+tauri-plugin-haptics = "2"
+tauri-plugin-nfc = "2"

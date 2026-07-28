@@ -142,6 +142,86 @@ export interface DeviceHost {
   watchNetwork?(onChange: (status: NetworkStatus) => void): Promise<NetworkWatchHandle>;
 }
 
+/** Loosely typed on purpose (matches `attachments`/`actions`/`schedule`, … from the host plugin). */
+export interface NotificationOptions {
+  title: string;
+  body?: string;
+  channelId?: string;
+  icon?: string;
+  sound?: string;
+  [key: string]: any;
+}
+
+export interface NotificationActionEvent {
+  notification: NotificationOptions & { id?: number };
+  actionId?: string;
+}
+
+export interface NotificationHost {
+  name: string;
+  isPermissionGranted(): Promise<boolean>;
+  requestPermission(): Promise<NotificationPermission>;
+  show(options: NotificationOptions | string): void;
+  /** Fires when the user taps the notification or one of its action buttons. */
+  onAction(callback: (event: NotificationActionEvent) => void): Promise<() => void>;
+}
+
+export type BiometryType = 'none' | 'touchId' | 'faceId' | 'iris';
+
+export interface BiometricStatus {
+  isAvailable: boolean;
+  biometryType: BiometryType;
+  error?: string;
+  errorCode?: string;
+}
+
+export interface BiometricAuthOptions {
+  allowDeviceCredential?: boolean;
+  cancelTitle?: string;
+  fallbackTitle?: string;
+  title?: string;
+  subtitle?: string;
+  confirmationRequired?: boolean;
+  maxAttempts?: number;
+}
+
+export interface BiometricHost {
+  name: string;
+  checkStatus(): Promise<BiometricStatus>;
+  authenticate(reason: string, options?: BiometricAuthOptions): Promise<void>;
+}
+
+export type HapticsImpactStyle = 'light' | 'medium' | 'heavy' | 'soft' | 'rigid';
+export type HapticsNotificationType = 'success' | 'warning' | 'error';
+
+export interface HapticsHost {
+  name: string;
+  vibrate(durationMs: number): Promise<void>;
+  impactFeedback(style: HapticsImpactStyle): Promise<void>;
+  notificationFeedback(type: HapticsNotificationType): Promise<void>;
+  selectionFeedback(): Promise<void>;
+}
+
+/**
+ * Loosely typed on purpose — scan/write cover NDEF and raw tag tech lists
+ * with a fairly deep type tree upstream (ScanKind/TechKind/NFCRecord); not
+ * worth re-declaring in full for a stdlib facade this thin.
+ */
+export interface NfcTag {
+  id: number[];
+  kind: string[];
+  records: any[];
+}
+
+export interface NfcHost {
+  name: string;
+  isAvailable(): Promise<boolean>;
+  scan(scanType: any, options?: any): Promise<NfcTag>;
+  write(records: any[], options?: any): Promise<void>;
+  textRecord(text: string, id?: string | number[], language?: string): any;
+  uriRecord(uri: string, id?: string | number[]): any;
+}
+
 export interface AgapiHost {
   name: string;
   net: NetHost;
@@ -150,6 +230,10 @@ export interface AgapiHost {
   tls?: TlsHost;
   mdns?: MdnsHost;
   device?: DeviceHost;
+  notifications?: NotificationHost;
+  biometric?: BiometricHost;
+  haptics?: HapticsHost;
+  nfc?: NfcHost;
 }
 
 /** Runtime slot set by installStdlib(). */

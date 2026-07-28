@@ -38,6 +38,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_websocket::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             set_devtools, 
             is_devtools_open, 
@@ -92,6 +93,17 @@ pub fn run() {
                     .level(log::LevelFilter::Info)
                     .build(),
             )?;
+
+            // Mobile-only: not compiled at all for desktop targets (see
+            // Cargo.toml's target.'cfg(android/ios)'.dependencies), so these
+            // can't be registered unconditionally like the plugins above.
+            #[cfg(mobile)]
+            {
+                app.handle().plugin(tauri_plugin_biometric::init())?;
+                app.handle().plugin(tauri_plugin_haptics::init())?;
+                app.handle().plugin(tauri_plugin_nfc::init())?;
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

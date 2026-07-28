@@ -1,7 +1,16 @@
 export { EventEmitter } from './events';
 export { SystemError, mapHostError } from './errors';
 export type { MapHostErrorOptions } from './errors';
-export type { AgapiHost, NetHost, HttpHost, DeviceHost } from './host';
+export type {
+  AgapiHost,
+  NetHost,
+  HttpHost,
+  DeviceHost,
+  NotificationHost,
+  BiometricHost,
+  HapticsHost,
+  NfcHost,
+} from './host';
 export { getHost, setHost } from './host';
 export { installStdlib, uninstallStdlib } from './install';
 export type { InstallOptions, AgapiRuntime } from './install';
@@ -31,6 +40,34 @@ export {
   MdnsBrowser,
 } from './mdns/index';
 export { default as device, getNetworkStatus, watchNetwork } from './device/index';
+export {
+  default as notifications,
+  isPermissionGranted as notificationsIsPermissionGranted,
+  requestPermission as notificationsRequestPermission,
+  show as notificationsShow,
+  onAction as notificationsOnAction,
+} from './notifications/index';
+export {
+  default as biometric,
+  checkStatus as biometricCheckStatus,
+  isAvailable as biometricIsAvailable,
+  authenticate as biometricAuthenticate,
+} from './biometric/index';
+export {
+  default as haptics,
+  vibrate as hapticsVibrate,
+  impact as hapticsImpact,
+  notification as hapticsNotification,
+  selection as hapticsSelection,
+} from './haptics/index';
+export {
+  default as nfc,
+  isAvailable as nfcIsAvailable,
+  scan as nfcScan,
+  write as nfcWrite,
+  textRecord as nfcTextRecord,
+  uriRecord as nfcUriRecord,
+} from './nfc/index';
 export type {
   DnsLookupAddress,
   DnsLookupOptions,
@@ -47,6 +84,14 @@ export type {
   NetworkAddress,
   NetworkStatus,
   NetworkWatchHandle,
+  NotificationOptions,
+  NotificationActionEvent,
+  BiometricStatus,
+  BiometryType,
+  BiometricAuthOptions,
+  HapticsImpactStyle,
+  HapticsNotificationType,
+  NfcTag,
 } from './host';
 
 // Re-export protocol payload type for convenience
