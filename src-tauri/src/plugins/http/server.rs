@@ -111,8 +111,17 @@ async fn handle_request(
         }
     }
 
-    // Read the body
-    let body_bytes = axum::body::to_bytes(body, usize::MAX).await.unwrap_or_default();
+    // Read the body, capped so a client can't exhaust memory
+    const MAX_BODY: usize = 32 * 1024 * 1024;
+    let body_bytes = match axum::body::to_bytes(body, MAX_BODY).await {
+        Ok(b) => b,
+        Err(_) => {
+            return axum::http::Response::builder()
+                .status(StatusCode::PAYLOAD_TOO_LARGE)
+                .body(axum::body::Body::from("Payload too large"))
+                .unwrap();
+        }
+    };
 
     let event = HttpRequestEvent {
         id: request_id.clone(),

@@ -9,39 +9,18 @@
     "core:default",
     "dialog:default",
     "os:default",
-    "fs:default",
-    "fs:read-all",
-    "fs:write-all",
+    "os:allow-hostname",
+    "fs:allow-app-read-recursive",
+    "fs:allow-app-write-recursive",
     "fs:allow-temp-write-recursive",
     {
-      "identifier": "fs:allow-read",
+      "identifier": "http:default",
       "allow": [
-        "**"
+        { "url": "http://*:*" },
+        { "url": "https://*:*" }
       ]
     },
-    {
-      "identifier": "fs:allow-read-dir",
-      "allow": [
-        "**"
-      ]
-    },
-    {
-      "identifier": "fs:allow-read-text-file",
-      "allow": [
-        "**"
-      ]
-    },
-    {
-      "identifier": "fs:allow-read-file",
-      "allow": [
-        "**"
-      ]
-    },
-    {
-      "identifier": "fs:allow-write-file",
-      "allow": [
-        "$TEMP/**"
-      ]
-    }
+    "websocket:default",
+    "notification:default"
   ]
 }

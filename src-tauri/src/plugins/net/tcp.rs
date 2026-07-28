@@ -1,6 +1,5 @@
 use super::NetState;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -39,6 +38,8 @@ pub struct TcpListenResult {
 
 pub enum TcpCommand {
     Write(Vec<u8>),
+    /// Half-close the write side (Node `socket.end()`); keep reading.
+    Shutdown,
     Destroy,
     SetKeepAlive(bool, Option<u64>),
     SetNoDelay(bool),
@@ -115,6 +116,23 @@ pub async fn tcp_connect<R: tauri::Runtime>(
                                 break;
                             }
                         }
+                        Some(TcpCommand::Shutdown) => {
+                            // Node-like end(): FIN on write side, keep reading
+                            if let Err(e) = stream.shutdown().await {
+                                let _ = app_clone.emit("plugin:net:tcp", NetEventPayload {
+                                    id: id_clone.clone(),
+                                    event: "error".to_string(),
+                                    error: Some(e.to_string()),
+                                    ..Default::default()
+                                });
+                                break;
+                            }
+                            let _ = app_clone.emit("plugin:net:tcp", NetEventPayload {
+                                id: id_clone.clone(),
+                                event: "finish".to_string(),
+                                ..Default::default()
+                            });
+                        }
                         Some(TcpCommand::SetKeepAlive(enable, delay)) => {
                             let sock = socket2::SockRef::from(&stream);
                             if enable {
@@ -183,6 +201,23 @@ pub async fn tcp_destroy(
     }
 }
 
+/// Half-close write side (Node `socket.end()` without destroying the handle).
+#[tauri::command]
+pub async fn tcp_shutdown(
+    state: State<'_, NetState>,
+    id: String,
+) -> Result<(), String> {
+    let sockets = state.tcp_sockets.lock().await;
+    if let Some(tx) = sockets.get(&id) {
+        tx.send(TcpCommand::Shutdown)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Socket not found".to_string())
+    }
+}
+
 // TCP SERVER
 #[tauri::command]
 pub async fn tcp_listen<R: tauri::Runtime>(
@@ -214,6 +249,13 @@ pub async fn tcp_listen<R: tauri::Runtime>(
                             let local_addr = stream.local_addr().ok();
                             let family = peer_addr.is_ipv4().then(|| "IPv4".to_string()).or_else(|| Some("IPv6".to_string()));
 
+                            // Register the socket BEFORE announcing it: a JS 'connection'
+                            // handler may synchronously write/destroy by client_id.
+                            let (client_tx, mut client_rx) = tokio::sync::mpsc::channel::<TcpCommand>(32);
+                            if let Some(state_mutex) = app_clone.try_state::<NetState>() {
+                                state_mutex.tcp_sockets.lock().await.insert(client_id.clone(), client_tx);
+                            }
+
                             let _ = app_clone.emit("plugin:net:tcpserver", NetEventPayload {
                                 id: id_clone.clone(),
                                 event: "connection".to_string(),
@@ -225,11 +267,6 @@ pub async fn tcp_listen<R: tauri::Runtime>(
                                 family,
                                 ..Default::default()
                             });
-
-                            let (client_tx, mut client_rx) = tokio::sync::mpsc::channel::<TcpCommand>(32);
-                            if let Some(state_mutex) = app_clone.try_state::<NetState>() {
-                                state_mutex.tcp_sockets.lock().await.insert(client_id.clone(), client_tx);
-                            }
                             
                             let app_clone_inner = app_clone.clone();
                             let client_id_clone = client_id.clone();
@@ -280,6 +317,22 @@ pub async fn tcp_listen<R: tauri::Runtime>(
                                                         });
                                                         break;
                                                     }
+                                                }
+                                                Some(TcpCommand::Shutdown) => {
+                                                    if let Err(e) = stream.shutdown().await {
+                                                        let _ = app_clone_inner.emit("plugin:net:tcp", NetEventPayload {
+                                                            id: client_id_clone.clone(),
+                                                            event: "error".to_string(),
+                                                            error: Some(e.to_string()),
+                                                            ..Default::default()
+                                                        });
+                                                        break;
+                                                    }
+                                                    let _ = app_clone_inner.emit("plugin:net:tcp", NetEventPayload {
+                                                        id: client_id_clone.clone(),
+                                                        event: "finish".to_string(),
+                                                        ..Default::default()
+                                                    });
                                                 }
                                                 Some(TcpCommand::SetKeepAlive(enable, delay)) => {
                                                     let sock = socket2::SockRef::from(&stream);

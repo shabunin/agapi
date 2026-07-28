@@ -30,23 +30,62 @@ fn resize_window(app: tauri::AppHandle, width: f64, height: f64) {
     }
 }
 
+/// Grant runtime fs-scope read access to a user-picked file (e.g. from
+/// `@tauri-apps/plugin-dialog`'s `open()`) plus its containing directory,
+/// recursively — so opening a CF project from anywhere on disk keeps
+/// working now that the static capability scope is narrowed to app dirs
+/// (see capabilities/default.json). The fs plugin ORs this runtime scope
+/// with the static ACL scope on every call (tauri-plugin-fs's
+/// `resolve_path`), so this only ever *adds* access to this one path, never
+/// removes the app-dir scope.
+#[tauri::command]
+fn fs_allow_read_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_fs::FsExt;
+    let scope = app.fs_scope();
+    let p = std::path::PathBuf::from(&path);
+    scope.allow_file(&p).map_err(|e| e.to_string())?;
+    if let Some(parent) = p.parent() {
+        scope
+            .allow_directory(parent, true)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_websocket::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
-            set_devtools, 
-            is_devtools_open, 
+            set_devtools,
+            is_devtools_open,
             resize_window,
+            fs_allow_read_path,
             plugins::net::tcp::tcp_connect,
             plugins::net::tcp::tcp_write,
             plugins::net::tcp::tcp_destroy,
+            plugins::net::tcp::tcp_shutdown,
             plugins::net::tcp::tcp_listen,
             plugins::net::tcp::tcp_server_close,
             plugins::net::tcp::tcp_set_keep_alive,
             plugins::net::tcp::tcp_set_no_delay,
+            plugins::net::dns::dns_lookup,
+            plugins::net::device::device_network_status,
+            plugins::net::device::device_watch_network_start,
+            plugins::net::device::device_watch_network_stop,
+            plugins::net::mdns::mdns_browse_start,
+            plugins::net::mdns::mdns_browse_stop,
+            plugins::net::mdns::mdns_publish,
+            plugins::net::mdns::mdns_unpublish,
+            plugins::net::tls::tls_connect,
+            plugins::net::tls::tls_write,
+            plugins::net::tls::tls_shutdown,
+            plugins::net::tls::tls_destroy,
             plugins::net::udp::udp_bind,
             plugins::net::udp::udp_send,
             plugins::net::udp::udp_close,
@@ -67,44 +106,27 @@ pub fn run() {
             plugins::http::server::http_server_respond,
             plugins::http::server::ws_send_message,
             plugins::http::server::ws_close_connection,
-            plugins::http::client::http_client_request,
         ])
         .setup(|app| {
             plugins::net::init_state(app.handle());
             plugins::http::init_state(app.handle());
-            #[cfg(desktop)]
-            {
-                use tauri::menu::{Menu, MenuItem, Submenu};
-                use tauri::Emitter;
-
-                let open_native = MenuItem::with_id(app, "open_native", "Open (native fs)", true, Some("CmdOrCtrl+O"))?;
-                let open_browser = MenuItem::with_id(app, "open_browser", "Open (in browser zip)", true, None::<&str>)?;
-                let reload = MenuItem::with_id(app, "reload", "Reload App", true, Some("CmdOrCtrl+R"))?;
-                let file_menu = Submenu::with_items(app, "File", true, &[&open_native, &open_browser, &reload])?;
-
-                let devtools = MenuItem::with_id(app, "devtools", "DevTools", true, Some("CmdOrCtrl+Shift+I"))?;
-                let outline = MenuItem::with_id(app, "outline", "Outline", true, Some("CmdOrCtrl+Shift+O"))?;
-                let fullscreen = MenuItem::with_id(app, "fullscreen", "Fullscreen", true, Some("F11"))?;
-                
-                let landscape = MenuItem::with_id(app, "landscape", "Landscape", true, Some("CmdOrCtrl+1"))?;
-                let portrait = MenuItem::with_id(app, "portrait", "Portrait", true, Some("CmdOrCtrl+2"))?;
-                let orientation_menu = Submenu::with_items(app, "Orientation", true, &[&landscape, &portrait])?;
-
-                let view_menu = Submenu::with_items(app, "View", true, &[&devtools, &outline, &fullscreen, &orientation_menu])?;
-
-                let menu = Menu::with_items(app, &[&file_menu, &view_menu])?;
-                app.set_menu(menu)?;
-
-                app.on_menu_event(move |app, event| {
-                    app.emit("menu-action", event.id().as_ref()).unwrap_or(());
-                });
-            }
 
             app.handle().plugin(
                 tauri_plugin_log::Builder::default()
                     .level(log::LevelFilter::Info)
                     .build(),
             )?;
+
+            // Mobile-only: not compiled at all for desktop targets (see
+            // Cargo.toml's target.'cfg(android/ios)'.dependencies), so these
+            // can't be registered unconditionally like the plugins above.
+            #[cfg(mobile)]
+            {
+                app.handle().plugin(tauri_plugin_biometric::init())?;
+                app.handle().plugin(tauri_plugin_haptics::init())?;
+                app.handle().plugin(tauri_plugin_nfc::init())?;
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

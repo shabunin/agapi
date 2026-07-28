@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Permissions for plugins that only exist on Android/iOS — not compiled into desktop builds at all (see Cargo.toml's target.'cfg(android/ios)'.dependencies).",
+  "windows": [
+    "main"
+  ],
+  "platforms": ["android", "iOS"],
+  "permissions": [
+    "biometric:default",
+    "haptics:allow-vibrate",
+    "haptics:allow-impact-feedback",
+    "haptics:allow-notification-feedback",
+    "haptics:allow-selection-feedback",
+    "nfc:default",
+    "nfc:allow-write"
+  ]
+}

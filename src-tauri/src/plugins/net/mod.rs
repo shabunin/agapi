@@ -3,13 +3,18 @@ use std::sync::Arc;
 use tauri::{Manager, AppHandle, Runtime};
 use tokio::sync::Mutex;
 
+pub mod device;
+pub mod dns;
+pub mod mdns;
 pub mod tcp;
+pub mod tls;
 pub mod udp;
 
 pub struct NetState {
     pub tcp_sockets: Arc<Mutex<HashMap<String, tokio::sync::mpsc::Sender<tcp::TcpCommand>>>>,
     pub udp_sockets: Arc<Mutex<HashMap<String, tokio::sync::mpsc::Sender<udp::UdpCommand>>>>,
     pub tcp_servers: Arc<Mutex<HashMap<String, tokio::sync::mpsc::Sender<tcp::TcpServerCommand>>>>,
+    pub tls_sockets: Arc<Mutex<HashMap<String, tokio::sync::mpsc::Sender<tls::TlsCommand>>>>,
 }
 
 pub fn init_state<R: Runtime>(app: &AppHandle<R>) {
@@ -17,5 +22,8 @@ pub fn init_state<R: Runtime>(app: &AppHandle<R>) {
         tcp_sockets: Arc::new(Mutex::new(HashMap::new())),
         udp_sockets: Arc::new(Mutex::new(HashMap::new())),
         tcp_servers: Arc::new(Mutex::new(HashMap::new())),
+        tls_sockets: Arc::new(Mutex::new(HashMap::new())),
     });
+    mdns::init_state(app);
+    device::init_state(app);
 }
