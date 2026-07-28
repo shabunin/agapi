@@ -11,6 +11,7 @@ import notifications from './notifications/index';
 import biometric from './biometric/index';
 import haptics from './haptics/index';
 import nfc from './nfc/index';
+import fs from './fs/index';
 import { Buffer } from './buffer';
 import { processShim } from './process';
 
@@ -27,6 +28,7 @@ export interface AgapiRuntime {
   biometric: typeof biometric;
   haptics: typeof haptics;
   nfc: typeof nfc;
+  fs: typeof fs;
   Buffer: typeof Buffer;
   process: typeof processShim;
   /** Active host name (`tauri`, `mock`, …). */
@@ -80,6 +82,7 @@ export function installStdlib(host: AgapiHost, options: InstallOptions = {}): vo
       biometric,
       haptics,
       nfc,
+      fs,
       Buffer,
       process: processShim,
       host: host.name,

@@ -10,6 +10,7 @@ import { createNotificationHost } from './notifications';
 import { createBiometricHost } from './biometric';
 import { createHapticsHost } from './haptics';
 import { createNfcHost } from './nfc';
+import { createFsHost } from './fs';
 
 export { TauriNetworkProvider } from './net/provider';
 export { TauriTcpSocket } from './net/socket';
@@ -24,6 +25,7 @@ export { createNotificationHost, TauriNotificationHost } from './notifications';
 export { createBiometricHost, TauriBiometricHost } from './biometric';
 export { createHapticsHost, TauriHapticsHost } from './haptics';
 export { createNfcHost, TauriNfcHost } from './nfc';
+export { createFsHost, TauriFsHost } from './fs';
 export * as tauriHttp from './http/index';
 export { net as tauriNet, dgram as tauriDgram } from './net/index';
 
@@ -63,6 +65,7 @@ export function createTauriHost(): AgapiHost {
     biometric: isMobile ? createBiometricHost() : undefined,
     haptics: isMobile ? createHapticsHost() : undefined,
     nfc: isMobile ? createNfcHost() : undefined,
+    fs: createFsHost(),
   };
 }
 

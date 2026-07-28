@@ -222,6 +222,68 @@ export interface NfcHost {
   uriRecord(uri: string, id?: string | number[]): any;
 }
 
+/**
+ * Scoped roots only — matches what the fs plugin's `fs:allow-app-*-recursive`
+ * capability grants (see capabilities/default.json): app data/config/cache/
+ * log dirs + temp. No arbitrary whole-disk root by design; an absolute path
+ * from e.g. a file picker still works, but needs its own runtime scope grant
+ * (see `fs_allow_read_path` in src-tauri/src/lib.rs) — that's a deliberate,
+ * per-path opt-in, not a blanket capability.
+ */
+export type FsBaseDir = 'appData' | 'appConfig' | 'appLocalData' | 'appCache' | 'appLog' | 'temp';
+
+export interface FsBaseDirOptions {
+  /** Defaults to 'appData'. */
+  baseDir?: FsBaseDir;
+}
+
+export interface FsReadOptions extends FsBaseDirOptions {
+  /** Text encoding. Defaults to 'utf-8'. */
+  encoding?: string;
+}
+
+export interface FsWriteOptions extends FsBaseDirOptions {}
+
+export interface FsMkdirOptions extends FsBaseDirOptions {
+  recursive?: boolean;
+}
+
+export interface FsRemoveOptions extends FsBaseDirOptions {
+  /** Remove non-empty directories too. Defaults to `false`. */
+  recursive?: boolean;
+}
+
+export interface FsDirEntry {
+  name: string;
+  isDirectory: boolean;
+  isFile: boolean;
+  isSymlink: boolean;
+}
+
+export interface FsFileInfo {
+  isFile: boolean;
+  isDirectory: boolean;
+  isSymlink: boolean;
+  size: number;
+  mtime: Date | null;
+  atime: Date | null;
+  birthtime: Date | null;
+  readonly: boolean;
+}
+
+export interface FsHost {
+  name: string;
+  readFile(path: string, options?: FsBaseDirOptions): Promise<Uint8Array>;
+  readTextFile(path: string, options?: FsReadOptions): Promise<string>;
+  writeFile(path: string, data: Uint8Array | string, options?: FsWriteOptions): Promise<void>;
+  appendFile(path: string, data: Uint8Array | string, options?: FsWriteOptions): Promise<void>;
+  mkdir(path: string, options?: FsMkdirOptions): Promise<void>;
+  readdir(path: string, options?: FsBaseDirOptions): Promise<FsDirEntry[]>;
+  stat(path: string, options?: FsBaseDirOptions): Promise<FsFileInfo>;
+  remove(path: string, options?: FsRemoveOptions): Promise<void>;
+  exists(path: string, options?: FsBaseDirOptions): Promise<boolean>;
+}
+
 export interface AgapiHost {
   name: string;
   net: NetHost;
@@ -234,6 +296,7 @@ export interface AgapiHost {
   biometric?: BiometricHost;
   haptics?: HapticsHost;
   nfc?: NfcHost;
+  fs?: FsHost;
 }
 
 /** Runtime slot set by installStdlib(). */

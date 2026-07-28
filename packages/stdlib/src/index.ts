@@ -10,6 +10,7 @@ export type {
   BiometricHost,
   HapticsHost,
   NfcHost,
+  FsHost,
 } from './host';
 export { getHost, setHost } from './host';
 export { installStdlib, uninstallStdlib } from './install';
@@ -68,6 +69,18 @@ export {
   textRecord as nfcTextRecord,
   uriRecord as nfcUriRecord,
 } from './nfc/index';
+export {
+  default as fs,
+  readFile as fsReadFile,
+  readTextFile as fsReadTextFile,
+  writeFile as fsWriteFile,
+  appendFile as fsAppendFile,
+  mkdir as fsMkdir,
+  readdir as fsReaddir,
+  stat as fsStat,
+  remove as fsRemove,
+  exists as fsExists,
+} from './fs/index';
 export type {
   DnsLookupAddress,
   DnsLookupOptions,
@@ -92,6 +105,9 @@ export type {
   HapticsImpactStyle,
   HapticsNotificationType,
   NfcTag,
+  FsBaseDir,
+  FsDirEntry,
+  FsFileInfo,
 } from './host';
 
 // Re-export protocol payload type for convenience
