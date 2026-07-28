@@ -42,16 +42,16 @@ cf-runtime may later *map* `CF.ipv4address` / `CF.startMonitoring` → `agapi.de
 | **T1+** | `dns.lookup`, `tls.connect` (client) | ✅ client only — server (`tls.createServer`, https server) ❌ planned, see Phase A |
 | **T1++** | `mdns.browse` / `publish` | ✅ lab (Tauri / mdns-sd) |
 | **T2** | `stream` / backpressure / `drain` | ❌ |
-| **T3** | `fs` subset | ❌ planned |
+| **T3** | `fs` subset | ✅ lab. Scoped to app data/config/cache/log dirs + temp (`fs:allow-app-*-recursive`), not whole-disk |
 | **T4** | **platform device** (network status, sensors, props, NFC, notify, bio, haptics, camera, BT) | 🟡 network status (C1), notifications (C5), biometric (C6, mobile-only), haptics (C7, mobile + browser fallback), NFC (C8, mobile-only) shipped; sensors/device-props/camera/BT ❌ planned |
 | **T4b** | `crypto` (stdlib façade) | ❌ browser Web Crypto in gallery only |
 
 Globals after `installStdlib` today:  
-**`agapi.{net,dgram,http,dns,tls,mdns,device,notifications,biometric,haptics,nfc,Buffer,process,host,version}`**.
-`agapi.device` is `getNetworkStatus()` + `watchNetwork()` only so far (see C1). `agapi.biometric`/`agapi.nfc` are **mobile-only** (Android/iOS — not compiled into desktop builds at all); `agapi.haptics` has a mobile host + `navigator.vibrate` browser fallback; `agapi.notifications` works everywhere.
+**`agapi.{net,dgram,http,dns,tls,mdns,device,notifications,biometric,haptics,nfc,fs,Buffer,process,host,version}`**.
+`agapi.device` is `getNetworkStatus()` + `watchNetwork()` only so far (see C1). `agapi.biometric`/`agapi.nfc` are **mobile-only** (Android/iOS — not compiled into desktop builds at all); `agapi.haptics` has a mobile host + `navigator.vibrate` browser fallback; `agapi.notifications` and `agapi.fs` work everywhere.
 
 Planned additions (names may refine):  
-**`agapi.sensors`**, **`agapi.fs`**, **`agapi.crypto`**, later camera/bluetooth. More `agapi.device` fields (battery, brightness, volume, identity — C2).
+**`agapi.sensors`**, **`agapi.crypto`**, later camera/bluetooth. More `agapi.device` fields (battery, brightness, volume, identity — C2).
 
 ---
 
@@ -104,7 +104,7 @@ Planned additions (names may refine):
 | Sensors | `agapi.sensors` | stub |
 | Haptics | `agapi.haptics` | lab (mobile host + browser `navigator.vibrate` fallback) |
 | Notifications | `agapi.notifications` | lab (desktop + mobile) |
-| Filesystem | `agapi.fs` | stub |
+| Filesystem | `agapi.fs` | lab |
 | NFC | `agapi.nfc` | lab (**mobile only**) |
 | Biometric | `agapi.biometric` | lab (**mobile only**) |
 | WebRTC / WebCodecs | browser | info |
@@ -151,17 +151,34 @@ Events: property change stream on `agapi.device` (not CF events in stdlib).
 
 API sketch: `agapi.sensors.start(type, options)` → handle with `stop()` + data events; `agapi.sensors.available()`.
 
-#### C4 — Filesystem subset **T3** (P1)
+#### C4 — Filesystem subset **T3** (P1) — ✅ shipped
 
-Narrow **host** FS (not full POSIX Node `fs`):
+Narrow **host** FS (not full POSIX Node `fs`), on official `@tauri-apps/plugin-fs`:
 
-| Op | Use |
-|----|-----|
-| `readFile` / `writeFile` / `appendFile` | logs, config, cache |
-| `mkdir` / `readdir` / `stat` / `remove` | app data dir |
-| scoped roots | app data, cache, optional user-picked dir |
+| Op | Status |
+|----|--------|
+| `agapi.fs.readFile` / `readTextFile` / `writeFile` / `appendFile` | ✅ |
+| `agapi.fs.mkdir` / `readdir` / `stat` / `remove` / `exists` | ✅ |
+| scoped roots (`baseDir`: appData/appConfig/appLocalData/appCache/appLog/temp) | ✅ |
+| arbitrary whole-disk access | ❌ **not** granted by default (see capability-tightening note below) |
 
-No arbitrary whole-disk access without explicit picker/permission.
+**Capability history worth knowing:** `capabilities/default.json` originally carried `fs:read-all` /
+`fs:write-all`, which (verified by reading `tauri-plugin-fs`'s own `permissions/*.toml`, not just
+docs) grant every fs-related command with **no pre-configured accessible paths at all** — i.e.
+unrestricted whole-disk read/write, not the narrower-looking allowlist entries sitting next to them.
+Asked the user, chose to tighten immediately rather than defer. Fixed in two parts:
+1. Narrowed the static ACL to `fs:allow-app-read-recursive` / `fs:allow-app-write-recursive` /
+   `fs:allow-temp-write-recursive` (official convenience sets scoped to `$APPCONFIG`/`$APPDATA`/
+   `$APPLOCALDATA`/`$APPCACHE`/`$APPLOG`/`$TEMP`).
+2. The CF project-open picker (`src/apps/cf/openProject.ts`) needs to read a user-picked file from
+   *anywhere* on disk, which the narrowed static scope no longer covers. Added a Rust command
+   `fs_allow_read_path` (`src-tauri/src/lib.rs`) that calls `tauri_plugin_fs::FsExt::fs_scope()` to
+   grant runtime read access to just that one path + its parent dir. This works because
+   `tauri-plugin-fs`'s `resolve_path` ORs the static ACL scope with this runtime scope
+   (`fs_scope.scope.is_allowed(..) || scope.is_allowed(..)`) — confirmed by reading the plugin's own
+   `commands.rs` — so it only ever *adds* access to the one picked path, never widens the rest.
+
+See [COMPAT.md](./COMPAT.md#filesystem-agapifs) for the full surface + code example.
 
 #### C5 — Notifications (P2) — ✅ shipped
 
@@ -243,7 +260,7 @@ agapi
 ├── Buffer, process, host, version
 ├── device       # getNetworkStatus()+watchNetwork() shipped; battery, brightness, volume, identity [planned]
 ├── sensors      # accel, gyro, attitude, heading, location               [planned]
-├── fs           # scoped files                                           [planned]
+├── fs           # scoped files (app data/config/cache/log + temp)        [shipped]
 ├── nfc          # NDEF scan/write — mobile only (Android/iOS)            [shipped]
 ├── notifications # permission + show + onAction — desktop + mobile       [shipped]
 ├── biometric    # checkStatus + authenticate — mobile only               [shipped]
@@ -309,7 +326,7 @@ Missing host capability → clear error in façade (same pattern as `mdns` / `ht
 |-------|------------------|-------------|
 | 1 | `feat/agapi-device-network` | ✅ shipped: network status snapshot + watch + gallery |
 | 2 | `feat/agapi-device-battery` | battery + property events |
-| 3 | `feat/agapi-fs` | scoped read/write + gallery |
+| 3 | `feat/agapi-fs` | ✅ shipped: scoped read/write/mkdir/readdir/stat/remove/exists + capability tightening + gallery |
 | 4 | `feat/agapi-sensors` | accel/geo first, then gyro/attitude/heading |
 | 5 | `feat/agapi-notifications` | ✅ shipped: permission + show + onAction + gallery |
 | 6 | `feat/agapi-haptics` | ✅ shipped: vibrate/impact/notification/selection + browser fallback + gallery |
@@ -347,3 +364,4 @@ Do **not** mix cf-runtime GUI changes into platform host PRs.
 | 2026-07-28 | **C1 watch shipped:** `agapi.device.watchNetwork(cb)` — background thread on `if_addrs::IfChangeNotifier`, emits a fresh snapshot per real change (spurious wakeups filtered internally). `async`-returning so a platform/permission failure rejects instead of silently no-op-ing. No Apple-platform backend (`IfChangeNotifier` doesn't exist there; not a build target today). Gallery tool got a Watch/Stop toggle + change log |
 | 2026-07-28 | Gallery regrouped into **Network** / **Device** / **Browser APIs** sections. Added OS info tool (direct `@tauri-apps/plugin-os` probe, not `agapi.*` yet) and gallery stubs for sensors/haptics/notifications/fs/nfc/biometric (previously "planned" rows with no UI). Pulled the camera stub for now — no host plan behind it. Dropped "NC"/"netcat" naming throughout (sockets tool, console header) — it read as a leftover from the original CF-tooling name, not a real distinction |
 | 2026-07-28 | **C5-C8 shipped:** `agapi.notifications` (`@tauri-apps/plugin-notification`, desktop+mobile), `agapi.biometric` and `agapi.nfc` (mobile-only — Android/iOS, not compiled into desktop builds at all: `target.'cfg(android/ios)'.dependencies` in `Cargo.toml`), `agapi.haptics` (mobile host + `navigator.vibrate` browser fallback in the stdlib facade). Verified real permission defaults from each plugin's own `permissions/default.toml` rather than trusting doc summaries — `haptics` has **no** default set at all (every `allow-*` must be listed explicitly), `os:default`/`biometric:default`/`nfc:default` exclude hostname/write respectively. New `capabilities/mobile.json` (`platforms: ["android","iOS"]`) holds the mobile-only permissions so desktop capabilities stay clean. Sensors/fs/Bluetooth gallery stubs unchanged (still genuinely not implemented) |
+| 2026-07-28 | **C4 shipped:** `agapi.fs` on official `@tauri-apps/plugin-fs` — `readFile`/`readTextFile`/`writeFile`/`appendFile`/`mkdir`/`readdir`/`stat`/`remove`/`exists`, scoped via `baseDir` (appData/appConfig/appLocalData/appCache/appLog/temp). Found (by reading the plugin's own `permissions/*.toml`, not docs) that `capabilities/default.json` had `fs:read-all`/`fs:write-all` — genuinely unrestricted whole-disk access, not the narrower allowlist entries sitting next to them. User chose to tighten immediately: narrowed to `fs:allow-app-*-recursive` + `fs:allow-temp-write-recursive`, and added a new `fs_allow_read_path` Rust command (`AppHandle::fs_scope()`) so the CF project-open picker can still grant runtime read access to an arbitrary user-picked path without widening the static ACL — relies on `tauri-plugin-fs::resolve_path` ORing the static scope with this runtime scope. Gallery `fs` stub replaced with a real read/write/mkdir/readdir/stat/remove lab |

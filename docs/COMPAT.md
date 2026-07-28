@@ -30,6 +30,7 @@ Single namespace: **`window.agapi`** / **`globalThis.agapi`** (no top-level `win
 | `agapi.biometric` | `checkStatus` / `authenticate` (**mobile only** — Android/iOS) |
 | `agapi.haptics` | `impact` / `notification` / `selection` / `vibrate` (mobile host, browser `navigator.vibrate` fallback) |
 | `agapi.nfc` | `isAvailable` / `scan` / `write` / `textRecord` / `uriRecord` (**mobile only** — Android/iOS) |
+| `agapi.fs` | `readFile` / `writeFile` / `appendFile` / `mkdir` / `readdir` / `stat` / `remove` / `exists` — scoped to app data/config/cache/log dirs + temp, ACL-enforced |
 | `agapi.Buffer` | minimal subset (from/alloc/concat/toString) |
 | `agapi.process` | `env`, `platform`, `nextTick`, `cwd()` stub |
 | `agapi.host` | active host name (`tauri`, `mock`, …) |
@@ -240,6 +241,58 @@ if (await agapi.nfc.isAvailable()) {
 full for a stdlib facade this thin. `textRecord()`/`uriRecord()` are pure data-shaping helpers
 (URI protocol-table encoding, no IPC) passed straight through the host rather than
 reimplemented, so upstream fixes/updates don't need manual porting.
+
+## Filesystem (agapi.fs)
+
+Host-backed via the official [`@tauri-apps/plugin-fs`](https://v2.tauri.app/reference/javascript/fs/).
+Scoped subset (T3), **not** a full-disk Node `fs` — every call's `baseDir` defaults to
+`'appData'` and can only target `'appData' | 'appConfig' | 'appLocalData' | 'appCache' |
+'appLog' | 'temp'`. This matches the actual capability grant
+(`fs:allow-app-read-recursive` / `fs:allow-app-write-recursive` /
+`fs:allow-temp-write-recursive` in `capabilities/default.json`) — the API doesn't merely
+*suggest* scoping, the ACL enforces it.
+
+```js
+await agapi.fs.mkdir('logs', { recursive: true });
+await agapi.fs.writeFile('logs/run.txt', 'started\n');
+await agapi.fs.appendFile('logs/run.txt', 'still running\n');
+
+const text = await agapi.fs.readTextFile('logs/run.txt');
+const bytes = await agapi.fs.readFile('logs/run.txt'); // Uint8Array
+
+for (const entry of await agapi.fs.readdir('logs')) {
+  console.log(entry.name, entry.isDirectory);
+}
+
+const info = await agapi.fs.stat('logs/run.txt');
+console.log(info.size, info.mtime);
+
+await agapi.fs.remove('logs/run.txt');
+await agapi.fs.exists('logs/run.txt'); // false
+
+// Other base dirs:
+await agapi.fs.writeFile('cache.json', '{}', { baseDir: 'appCache' });
+```
+
+**Capability history worth knowing:** this project's `capabilities/default.json` used to grant
+`fs:read-all` + `fs:write-all` (the fs plugin's own "no pre-configured accessible paths" —
+i.e. **unrestricted whole-disk read/write**, confirmed straight from the crate's
+`permissions/*.toml`, not assumed). That predated `agapi.fs` and was there so the CF
+project-open dialog (`src/apps/cf/openProject.ts`) could read a `.gui`/`.zip` file the user
+picked from anywhere on disk. Adding `agapi.fs` was the trigger to actually scope it down:
+
+- `capabilities/default.json` now only grants `fs:allow-app-read-recursive` /
+  `fs:allow-app-write-recursive` (official Tauri permission sets — full CRUD, scoped to
+  `$APPDATA`/`$APPCONFIG`/`$APPLOCALDATA`/`$APPCACHE`/`$APPLOG`, recursively) plus
+  `fs:allow-temp-write-recursive` (unchanged, for zip extraction into `$TEMP`).
+- The CF project-open picker still needs to read an **arbitrary** user-chosen path, which no
+  static capability scope can express ahead of time. It now calls a small custom command,
+  `fs_allow_read_path` (`src-tauri/src/lib.rs`), right after the dialog returns a path — it
+  calls the fs plugin's own `AppHandle::fs_scope()` (`allow_file`/`allow_directory`) to grant
+  **runtime** read access to just that file + its containing folder. The fs plugin ORs this
+  runtime scope with the static ACL scope on every path resolution
+  (`tauri-plugin-fs::commands::resolve_path`), so this only ever *adds* access to the one
+  path the user picked — it never widens `agapi.fs`'s own app-dir scope.
 
 ## HTTPS client options (CF.request / agapi.http)
 
