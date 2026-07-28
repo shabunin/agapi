@@ -43,15 +43,15 @@ cf-runtime may later *map* `CF.ipv4address` / `CF.startMonitoring` → `agapi.de
 | **T1++** | `mdns.browse` / `publish` | ✅ lab (Tauri / mdns-sd) |
 | **T2** | `stream` / backpressure / `drain` | ❌ |
 | **T3** | `fs` subset | ❌ planned |
-| **T4** | **platform device** (network status, sensors, props, NFC, notify, bio, haptics, camera, BT) | 🟡 network status shipped (snapshot + watch, no `ssid` — see C1); rest ❌ planned |
+| **T4** | **platform device** (network status, sensors, props, NFC, notify, bio, haptics, camera, BT) | 🟡 network status (C1), notifications (C5), biometric (C6, mobile-only), haptics (C7, mobile + browser fallback), NFC (C8, mobile-only) shipped; sensors/device-props/camera/BT ❌ planned |
 | **T4b** | `crypto` (stdlib façade) | ❌ browser Web Crypto in gallery only |
 
 Globals after `installStdlib` today:  
-**`agapi.{net,dgram,http,dns,tls,mdns,device,Buffer,process,host,version}`**.
-`agapi.device` is `getNetworkStatus()` + `watchNetwork()` only so far — see C1.
+**`agapi.{net,dgram,http,dns,tls,mdns,device,notifications,biometric,haptics,nfc,Buffer,process,host,version}`**.
+`agapi.device` is `getNetworkStatus()` + `watchNetwork()` only so far (see C1). `agapi.biometric`/`agapi.nfc` are **mobile-only** (Android/iOS — not compiled into desktop builds at all); `agapi.haptics` has a mobile host + `navigator.vibrate` browser fallback; `agapi.notifications` works everywhere.
 
 Planned additions (names may refine):  
-**`agapi.sensors`**, **`agapi.fs`**, **`agapi.nfc`**, **`agapi.notifications`**, **`agapi.biometric`**, **`agapi.haptics`**, **`agapi.crypto`**, later camera/bluetooth. More `agapi.device` fields (battery, brightness, volume, identity — C2).
+**`agapi.sensors`**, **`agapi.fs`**, **`agapi.crypto`**, later camera/bluetooth. More `agapi.device` fields (battery, brightness, volume, identity — C2).
 
 ---
 
@@ -102,11 +102,11 @@ Planned additions (names may refine):
 | OS info | `@tauri-apps/plugin-os` (direct, not `agapi.*` yet) | lab |
 | Bluetooth | host planned | stub |
 | Sensors | `agapi.sensors` | stub |
-| Haptics | `agapi.haptics` | stub |
-| Notifications | `agapi.notifications` | stub |
+| Haptics | `agapi.haptics` | lab (mobile host + browser `navigator.vibrate` fallback) |
+| Notifications | `agapi.notifications` | lab (desktop + mobile) |
 | Filesystem | `agapi.fs` | stub |
-| NFC | `agapi.nfc` | stub |
-| Biometric | `agapi.biometric` | stub |
+| NFC | `agapi.nfc` | lab (**mobile only**) |
+| Biometric | `agapi.biometric` | lab (**mobile only**) |
 | WebRTC / WebCodecs | browser | info |
 | Crypto | browser `crypto.subtle` | lab (not `agapi.crypto` yet) |
 | **Device props** (battery, brightness, volume, identity) | `agapi.device` | planned |
@@ -163,42 +163,50 @@ Narrow **host** FS (not full POSIX Node `fs`):
 
 No arbitrary whole-disk access without explicit picker/permission.
 
-#### C5 — Notifications (P2)
+#### C5 — Notifications (P2) — ✅ shipped
 
-| Op | Notes |
+| Op | Status |
 |----|--------|
-| `agapi.notifications.requestPermission()` | OS / web |
-| `agapi.notifications.show({ title, body, … })` | local notify |
-| optional tap / dismiss events | host-dependent |
+| `agapi.notifications.isPermissionGranted()` / `requestPermission()` | ✅ official `@tauri-apps/plugin-notification`, desktop + mobile |
+| `agapi.notifications.show({ title, body, … })` | ✅ synchronous, matching the underlying plugin |
+| `agapi.notifications.onAction(cb)` | ✅ tap / action-button events |
 
-#### C6 — Biometric (P2)
+#### C6 — Biometric (P2) — ✅ shipped, mobile-only
 
-| Op | Notes |
+| Op | Status |
 |----|--------|
-| `agapi.biometric.isAvailable()` | face / fingerprint / none |
-| `agapi.biometric.authenticate({ reason })` | unlock / confirm action |
+| `agapi.biometric.checkStatus()` | ✅ full upstream shape: `isAvailable`, `biometryType`, `error`, `errorCode` |
+| `agapi.biometric.authenticate(reason, options?)` | ✅ rejects on cancel/failure |
 
-Host-only on mobile/desktop OS; no pure-browser guarantee.
+Official `@tauri-apps/plugin-biometric` — **Android/iOS only**, not compiled into desktop
+builds at all (`target.'cfg(android/ios)'.dependencies` in `src-tauri/Cargo.toml`); no
+pure-browser fallback exists for this one.
 
-#### C7 — Haptics (P2)
+#### C7 — Haptics (P2) — ✅ shipped
 
-| Op | Notes |
+| Op | Status |
 |----|--------|
-| `agapi.haptics.impact(style?)` | light / medium / heavy |
-| `agapi.haptics.notification(type?)` | success / warning / error |
-| `agapi.haptics.selection()` | tick |
+| `agapi.haptics.impact(style?)` | ✅ light / medium / heavy / soft / rigid (richer than originally sketched) |
+| `agapi.haptics.notification(type?)` | ✅ success / warning / error |
+| `agapi.haptics.selection()` | ✅ |
+| `agapi.haptics.vibrate(ms)` | ✅ bonus, matches the plugin 1:1 |
 
-Browser: `navigator.vibrate` fallback where present; mobile host preferred.
+Official `@tauri-apps/plugin-haptics` (mobile-only, same as biometric) **with** a
+`navigator.vibrate` browser/desktop-webview fallback implemented in the stdlib facade itself
+— the one part of C6-C8 that isn't strictly mobile-locked.
 
-#### C8 — NFC (P2–P3)
+#### C8 — NFC (P2–P3) — ✅ shipped, mobile-only
 
-| Op | Notes |
+| Op | Status |
 |----|--------|
-| scan / session | NDEF read |
-| write (optional) | where OS allows |
-| availability | Android-first; iOS limited; desktop rare |
+| `agapi.nfc.isAvailable()` | ✅ |
+| `agapi.nfc.scan(scanType, options?)` | ✅ NDEF/tag scan |
+| `agapi.nfc.write(records, options?)` | ✅ |
+| `agapi.nfc.textRecord()` / `uriRecord()` | ✅ pure passthrough to the plugin's own encoders — not reimplemented |
 
-Likely **host plugin** only; gallery stub until mobile host exists.
+Official `@tauri-apps/plugin-nfc` — **Android/iOS only**. `scanType`/`options`/records stay
+loosely typed (`any`) in `NfcHost` — the upstream `ScanKind`/`TechKind`/`NFCRecord` tree is
+fairly deep and not worth re-declaring for a facade this thin.
 
 #### C9 — Camera / Bluetooth
 
@@ -236,10 +244,10 @@ agapi
 ├── device       # getNetworkStatus()+watchNetwork() shipped; battery, brightness, volume, identity [planned]
 ├── sensors      # accel, gyro, attitude, heading, location               [planned]
 ├── fs           # scoped files                                           [planned]
-├── nfc          # NDEF scan/write                                        [planned]
-├── notifications
-├── biometric
-├── haptics
+├── nfc          # NDEF scan/write — mobile only (Android/iOS)            [shipped]
+├── notifications # permission + show + onAction — desktop + mobile       [shipped]
+├── biometric    # checkStatus + authenticate — mobile only               [shipped]
+├── haptics      # impact/notification/selection/vibrate — mobile + browser vibrate fallback [shipped]
 ├── crypto       # optional thin WebCrypto/host wrapper                   [planned]
 ├── camera / bluetooth   # mobile                                         [planned]
 └── drivers      # later install from @agapi/drivers
@@ -303,10 +311,10 @@ Missing host capability → clear error in façade (same pattern as `mdns` / `ht
 | 2 | `feat/agapi-device-battery` | battery + property events |
 | 3 | `feat/agapi-fs` | scoped read/write + gallery |
 | 4 | `feat/agapi-sensors` | accel/geo first, then gyro/attitude/heading |
-| 5 | `feat/agapi-notifications` | local notifications |
-| 6 | `feat/agapi-haptics` | vibrate / impact |
-| 7 | `feat/agapi-biometric` | auth prompt |
-| 8 | `feat/agapi-nfc` | mobile NDEF |
+| 5 | `feat/agapi-notifications` | ✅ shipped: permission + show + onAction + gallery |
+| 6 | `feat/agapi-haptics` | ✅ shipped: vibrate/impact/notification/selection + browser fallback + gallery |
+| 7 | `feat/agapi-biometric` | ✅ shipped: checkStatus + authenticate (mobile-only) + gallery |
+| 8 | `feat/agapi-nfc` | ✅ shipped: isAvailable/scan/write + gallery (mobile-only) |
 | 9 | `feat/cf-bridge-device` | **only then** map CF.* → agapi (optional) |
 
 Do **not** mix cf-runtime GUI changes into platform host PRs.
@@ -338,3 +346,4 @@ Do **not** mix cf-runtime GUI changes into platform host PRs.
 | 2026-07-28 | **Phase C1 shipped:** `agapi.device.getNetworkStatus()` — snapshot (`hasNetwork`, best-effort `networkType`, non-loopback `addresses`) via `if_addrs::get_if_addrs()`. No `ssid` (needs platform-specific Wi-Fi APIs); gallery Network status tool added |
 | 2026-07-28 | **C1 watch shipped:** `agapi.device.watchNetwork(cb)` — background thread on `if_addrs::IfChangeNotifier`, emits a fresh snapshot per real change (spurious wakeups filtered internally). `async`-returning so a platform/permission failure rejects instead of silently no-op-ing. No Apple-platform backend (`IfChangeNotifier` doesn't exist there; not a build target today). Gallery tool got a Watch/Stop toggle + change log |
 | 2026-07-28 | Gallery regrouped into **Network** / **Device** / **Browser APIs** sections. Added OS info tool (direct `@tauri-apps/plugin-os` probe, not `agapi.*` yet) and gallery stubs for sensors/haptics/notifications/fs/nfc/biometric (previously "planned" rows with no UI). Pulled the camera stub for now — no host plan behind it. Dropped "NC"/"netcat" naming throughout (sockets tool, console header) — it read as a leftover from the original CF-tooling name, not a real distinction |
+| 2026-07-28 | **C5-C8 shipped:** `agapi.notifications` (`@tauri-apps/plugin-notification`, desktop+mobile), `agapi.biometric` and `agapi.nfc` (mobile-only — Android/iOS, not compiled into desktop builds at all: `target.'cfg(android/ios)'.dependencies` in `Cargo.toml`), `agapi.haptics` (mobile host + `navigator.vibrate` browser fallback in the stdlib facade). Verified real permission defaults from each plugin's own `permissions/default.toml` rather than trusting doc summaries — `haptics` has **no** default set at all (every `allow-*` must be listed explicitly), `os:default`/`biometric:default`/`nfc:default` exclude hostname/write respectively. New `capabilities/mobile.json` (`platforms: ["android","iOS"]`) holds the mobile-only permissions so desktop capabilities stay clean. Sensors/fs/Bluetooth gallery stubs unchanged (still genuinely not implemented) |

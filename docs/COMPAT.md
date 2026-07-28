@@ -25,7 +25,11 @@ Single namespace: **`window.agapi`** / **`globalThis.agapi`** (no top-level `win
 | `agapi.dns` | `lookup` / `lookupAsync` |
 | `agapi.tls` | `connect` (client only) |
 | `agapi.mdns` | `browse` / `publish` (DNS-SD; Tauri host) |
-| `agapi.device` | `getNetworkStatus()` — online snapshot, local addresses (Tauri host) |
+| `agapi.device` | `getNetworkStatus()` / `watchNetwork()` — online snapshot + watch, local addresses (Tauri host) |
+| `agapi.notifications` | `isPermissionGranted` / `requestPermission` / `show` / `onAction` (desktop + mobile) |
+| `agapi.biometric` | `checkStatus` / `authenticate` (**mobile only** — Android/iOS) |
+| `agapi.haptics` | `impact` / `notification` / `selection` / `vibrate` (mobile host, browser `navigator.vibrate` fallback) |
+| `agapi.nfc` | `isAvailable` / `scan` / `write` / `textRecord` / `uriRecord` (**mobile only** — Android/iOS) |
 | `agapi.Buffer` | minimal subset (from/alloc/concat/toString) |
 | `agapi.process` | `env`, `platform`, `nextTick`, `cwd()` stub |
 | `agapi.host` | active host name (`tauri`, `mock`, …) |
@@ -152,6 +156,90 @@ debounced by us). `watchNetwork` is `async` specifically so a platform/permissio
 - `networkType` is a **best-effort guess from interface names** (`wl*` → wifi, `eth*`/`en*` → ethernet), not a real OS API query — no portable API distinguishes Wi-Fi from Ethernet across Linux/Windows/Android/macOS without extra platform-specific work.
 - There is **no `ssid` field**. Reading the SSID needs platform-specific Wi-Fi APIs (nl80211 on Linux, `NEHotspotNetwork` on Apple platforms, WinRT on Windows) that no host implements yet.
 - `watchNetwork` has **no Apple-platform backend**: `if-addrs`'s `IfChangeNotifier` doesn't exist on macOS/iOS/tvOS/watchOS/visionOS. This project doesn't build for those today, so it isn't handled — a future macOS/iOS target will need a different watch backend here.
+
+## Notifications
+
+Host-backed via the official [`@tauri-apps/plugin-notification`](https://v2.tauri.app/plugin/notification/).
+Cross-platform: desktop (Windows/Linux/macOS) **and** mobile — unlike biometric/haptics/nfc below.
+
+```js
+let granted = await agapi.notifications.isPermissionGranted();
+if (!granted) {
+  granted = (await agapi.notifications.requestPermission()) === 'granted';
+}
+if (granted) {
+  agapi.notifications.show({ title: 'agapi', body: 'hello' });
+}
+
+// Fires on tap / action-button interaction
+const stop = await agapi.notifications.onAction((ev) => console.log(ev.notification, ev.actionId));
+```
+
+`show()` is **synchronous**, matching the underlying plugin (`sendNotification()` — a bad
+options shape throws immediately, not via a rejected promise). `NotificationOptions` is
+loosely typed (`title`/`body`/`channelId`/`icon`/`sound` + an index signature) — the real
+plugin supports far more (attachments, scheduling, Android channels, iOS actions); ask for
+that surface explicitly if a script needs it rather than assuming it's wired through.
+
+## Biometric
+
+Host-backed via the official [`@tauri-apps/plugin-biometric`](https://v2.tauri.app/plugin/biometric/).
+**Mobile only (Android/iOS)** — the Rust crate isn't even compiled into desktop builds
+(`src-tauri/Cargo.toml`'s `target.'cfg(android/ios)'.dependencies`), so `agapi.biometric` is
+`undefined` on desktop hosts; calling it throws a clear "mobile-only" error, not a raw IPC failure.
+
+```js
+const status = await agapi.biometric.checkStatus();
+// { isAvailable, biometryType: 'none'|'touchId'|'faceId'|'iris', error?, errorCode? }
+
+if (status.isAvailable) {
+  await agapi.biometric.authenticate("Confirm it's you");
+  // rejects if the user cancels or authentication fails
+}
+```
+
+`checkStatus()` exposes the full upstream `Status` shape (richer than a plain boolean) since
+it's cheap to pass through honestly. One naming fix: the plugin's own `AuthOptions.maxAttemps`
+has a typo — our `authenticate(reason, options)` spells it `maxAttempts` and maps it internally.
+
+## Haptics
+
+Host-backed via the official [`@tauri-apps/plugin-haptics`](https://v2.tauri.app/plugin/haptics/).
+**Mobile only** for the host — same compiled-out-on-desktop story as biometric — but
+`agapi.haptics` itself works everywhere: with no host, it falls back to `navigator.vibrate`
+in any browser/webview that has one.
+
+```js
+await agapi.haptics.impact('medium');       // 'light'|'medium'|'heavy'|'soft'|'rigid'
+await agapi.haptics.notification('success'); // 'success'|'warning'|'error'
+await agapi.haptics.selection();
+await agapi.haptics.vibrate(200);            // ms
+```
+
+Per the plugin's own docs: "There are no standards/requirements for vibration support on
+Android, so the feedback APIs may not work correctly on more affordable phones." Not our bug.
+
+## NFC
+
+Host-backed via the official [`@tauri-apps/plugin-nfc`](https://v2.tauri.app/plugin/nfc/).
+**Mobile only (Android/iOS)** — same compiled-out-on-desktop story as biometric/haptics.
+
+```js
+if (await agapi.nfc.isAvailable()) {
+  const tag = await agapi.nfc.scan({ type: 'ndef' });
+  console.log(tag.id, tag.records);
+
+  await agapi.nfc.write([agapi.nfc.uriRecord('https://tauri.app')], {
+    kind: { type: 'ndef' },
+  });
+}
+```
+
+`scanType`/`options`/records are loosely typed (`any`) on purpose — the upstream type tree
+(`ScanKind` union, `TechKind` enum, `NFCRecord`) is fairly deep and not worth re-declaring in
+full for a stdlib facade this thin. `textRecord()`/`uriRecord()` are pure data-shaping helpers
+(URI protocol-table encoding, no IPC) passed straight through the host rather than
+reimplemented, so upstream fixes/updates don't need manual porting.
 
 ## HTTPS client options (CF.request / agapi.http)
 
