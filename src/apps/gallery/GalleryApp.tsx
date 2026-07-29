@@ -55,7 +55,9 @@ import WebrtcInfo from './tools/WebrtcInfo';
 import WebcodecsInfo from './tools/WebcodecsInfo';
 import WebAnimationsTool from './tools/WebAnimationsTool';
 import GesturesTool from './tools/GesturesTool';
-import SonosTool from './tools/SonosTool';
+
+// Keep driver tools out of the main gallery chunk — loaded only when opened.
+const SonosTool = lazy(() => import('./tools/SonosTool'));
 
 // matter.js pulls in ~2MB of protocol/crypto code — lazy-load so it's only
 // fetched when someone actually opens this tool, not on every app boot.
@@ -207,7 +209,17 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
     );
   }
   if (tool === 'sonos') {
-    return <SonosTool onBack={() => setTool('hub')} />;
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-500 text-sm">
+            Loading Sonos…
+          </div>
+        }
+      >
+        <SonosTool onBack={() => setTool('hub')} />
+      </Suspense>
+    );
   }
 
   return (
