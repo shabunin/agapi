@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { Beaker, Layers, LayoutGrid } from 'lucide-react';
-import CfApp from './apps/CfApp';
 import GalleryApp from './apps/gallery/GalleryApp';
+
+// @agapi/cf-runtime pulls in Pixi.js — lazy-load so it's only fetched when
+// the user actually opens the CF app, not on every launcher boot.
+const CfApp = lazy(() => import('./apps/CfApp'));
 
 type AppId = 'launcher' | 'cf' | 'gallery';
 
@@ -14,7 +17,17 @@ export default function App() {
   const [active, setActive] = useState<AppId>('launcher');
 
   if (active === 'cf') {
-    return <CfApp onBack={() => setActive('launcher')} />;
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-500 text-sm">
+            Loading cf-runtime…
+          </div>
+        }
+      >
+        <CfApp onBack={() => setActive('launcher')} />
+      </Suspense>
+    );
   }
   if (active === 'gallery') {
     return <GalleryApp onBack={() => setActive('launcher')} />;
