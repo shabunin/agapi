@@ -31,6 +31,17 @@ export default defineConfig(({mode}) => {
       },
     },
     build: {
+      // matter.js ships native class private fields (#field) and relies on
+      // a "constructor returns a different object" trick (Callable, in
+      // @matter/general/util/Function.ts) to make class instances directly
+      // invocable. esbuild's default (pre-ES2022) target downlevel-compiles
+      // private fields to a WeakMap-based __privateGet/__privateSet
+      // emulation that doesn't correctly rebind `this` after such a
+      // constructor substitution — instances end up not actually callable
+      // ("X.call is not a function"), even though every real Tauri webview
+      // target (WebKitGTK/WebView2/WKWebView) supports native private
+      // fields directly. esnext skips that transform entirely.
+      target: 'esnext',
       rollupOptions: {
         input: {
           main: 'index.html',
@@ -40,6 +51,12 @@ export default defineConfig(({mode}) => {
     // Allow importing .ts sources from workspace packages
     optimizeDeps: {
       exclude: ['@agapi/stdlib', '@agapi/host-tauri', '@agapi/host-protocol'],
+      esbuildOptions: {
+        // Same reasoning as build.target above — this is the target actually
+        // used when esbuild pre-bundles node_modules deps like matter.js for
+        // the dev server.
+        target: 'esnext',
+      },
     },
   };
 });

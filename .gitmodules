@@ -1,0 +1,3 @@
+[submodule "packages/matterjs/vendor/matter.js"]
+	path = packages/matterjs/vendor/matter.js
+	url = https://github.com/matter-js/matter.js

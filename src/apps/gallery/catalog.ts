@@ -205,4 +205,33 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     accent: 'lime',
     group: 'browser',
   },
+
+  // ── Drivers ───────────────────────────────────────────────
+  {
+    id: 'matter',
+    title: 'Matter',
+    blurb: 'Real device discovery (mDNS) + commissioning (PASE/CASE) via matter.js, on top of agapi.dgram/agapi.device.',
+    surface: '@agapi/matterjs · @project-chip/matter.js',
+    status: 'lab',
+    accent: 'violet',
+    group: 'drivers',
+  },
+  {
+    id: 'sonos',
+    title: 'Sonos',
+    blurb: 'Discover speakers via SSDP, then play/pause/volume/mute over UPnP SOAP — real devices on your LAN.',
+    surface: '@agapi/sonos · agapi.dgram + agapi.http',
+    status: 'lab',
+    accent: 'emerald',
+    group: 'drivers',
+  },
+  {
+    id: 'simple-device',
+    title: 'SimpleDevice',
+    blurb: 'Copy-paste TCP/line driver skeleton — power on|off|? over CRLF, agapi.net + node:net + mock server.',
+    surface: '@agapi/driver-template · agapi.net',
+    status: 'lab',
+    accent: 'cyan',
+    group: 'drivers',
+  },
 ];

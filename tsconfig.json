@@ -40,6 +40,24 @@
       ],
       "@agapi/cf-runtime/*": [
         "packages/cf-runtime/src/*"
+      ],
+      "@agapi/matterjs": [
+        "packages/matterjs/src/index.ts"
+      ],
+      "@agapi/matterjs/*": [
+        "packages/matterjs/src/*"
+      ],
+      "@agapi/sonos": [
+        "packages/sonos/src/index.ts"
+      ],
+      "@agapi/sonos/*": [
+        "packages/sonos/src/*"
+      ],
+      "@agapi/driver-template": [
+        "packages/driver-template/src/index.ts"
+      ],
+      "@agapi/driver-template/*": [
+        "packages/driver-template/src/*"
       ]
     },
     "allowImportingTsExtensions": true,
@@ -51,6 +69,7 @@
     "demos",
     "src-tauri/target",
     "docs-for-agent",
-    "docs-iViewer-JavaScript-API"
+    "docs-iViewer-JavaScript-API",
+    "packages/matterjs/vendor"
   ]
 }
