@@ -105,10 +105,221 @@ Wire the monorepo:
 
 1. **Protocol core is transport-agnostic** — pure TS over small seams (`post`/`get`, UDP socket). No `import` from `@tauri-apps/*`, CF, or Pixi in `src/protocol/`.
 2. **Agapi glue in the package** — `createAgapi*Transport()` using `@agapi/stdlib` (same idea as Sonos).
-3. **Node/dev optional** — `dev/` with `tsx` against real gear without launching Tauri (Sonos pattern). Speeds up protocol work a lot.
+3. **Node/dev harness** — `dev/node-transport.ts` + small CLI scripts; same seams over `node:dgram` / `fetch` / `node:http` so you can hit real gear with `tsx` without Tauri.
 4. **Gallery is the lab, not the public API** — interactive proof + code snippets; ship a clear package surface from `src/index.ts`.
 5. **Heavy deps → lazy-load the gallery tool** — Matter (~2MB) uses `React.lazy`. Sonos is small and static-imported. Follow size, not dogma.
 6. **Do not put brand protocols in `@agapi/stdlib`** — stdlib is transport + platform only.
+
+#### 3b. Transport-agnostic layout (Sonos pattern — copy this)
+
+The whole point: **protocol code never knows** whether it runs under Tauri (`agapi.*`) or under plain Node. You define thin **seams** (interfaces), implement them twice, inject at the edge.
+
+```text
+packages/<name>/
+  src/
+    protocol/                 # ZERO imports of agapi / node / tauri / CF
+      client.ts               # Device class takes SoapTransport in constructor
+      discovery.ts            # discover(socket: DiscoverySocket, …)
+      soap.ts / ssdp.ts / …   # pure encoding / parsing
+    agapi-transport.ts        # createAgapiSoapTransport(), createAgapiDiscoverySocket()
+    index.ts                  # public API: core + agapi helpers (what the app imports)
+  dev/
+    node-transport.ts         # createNodeSoapTransport(), createNodeDiscoverySocket()
+    discover.ts               # CLI: tsx …  (uses NODE transport)
+    control.ts                # CLI: tsx … <ip> play|state|…
+```
+
+**Layer diagram**
+
+```text
+  gallery / CF script / tauri:dev          dev/control.ts (tsx, no Tauri)
+            │                                         │
+            ▼                                         ▼
+   createAgapiSoapTransport()              createNodeSoapTransport()
+   createAgapiDiscoverySocket()            createNodeDiscoverySocket()
+            │                                         │
+            │         same interfaces                 │
+            └────────────────┬────────────────────────┘
+                             ▼
+                    src/protocol/*  (SonosDevice, discover, …)
+                             │
+                    real speaker on the LAN
+```
+
+**Step A — invent seams in `protocol/` (not implementations)**
+
+Only shapes the core needs. Example from Sonos (`packages/sonos/src/protocol/client.ts`):
+
+```ts
+// HTTP for SOAP — no fetch, no agapi.http here
+export interface SoapTransport {
+  post(url: string, soapAction: string, body: string): Promise<{ status: number; body: string }>;
+  get(url: string): Promise<{ status: number; body: string }>;
+}
+
+export class SonosDevice {
+  constructor(
+    public readonly address: string,
+    private readonly transport: SoapTransport,  // injected
+  ) {}
+
+  play() {
+    return this.call(/* … uses this.transport.post … */);
+  }
+}
+```
+
+UDP discovery seam (same idea):
+
+```ts
+export interface DiscoverySocket {
+  send(data: Uint8Array, port: number, address: string): void;
+  onMessage(cb: (msg: Uint8Array, rinfo: { address: string }) => void): void;
+  close(): void;
+}
+
+export async function discover(socket: DiscoverySocket, …): Promise<…> { /* SSDP only */ }
+```
+
+Rules for seams:
+
+- Return plain data (`{ status, body }`, `Uint8Array`) — not Node streams or Tauri types.
+- Prefer **resolve on HTTP 4xx/5xx** when the protocol puts errors in the body (UPnP SOAP faults).
+- Keep methods small: `post` / `get` / `send` / `onMessage`. If you need headers (GENA `SID`), extend the result type once for both backends.
+
+**Step B — `src/agapi-transport.ts` (production / gallery)**
+
+Implements the same interfaces with `@agapi/stdlib`:
+
+```ts
+import { dgram, http } from '@agapi/stdlib';
+import type { SoapTransport } from './protocol/client.js';
+
+export function createAgapiSoapTransport(): SoapTransport {
+  return {
+    post: (url, soapAction, body) => /* http.request({ url, method: 'POST', headers: { SOAPACTION: … } }) */,
+    get: (url) => /* http.request({ url, method: 'GET' }) */,
+  };
+}
+
+export function createAgapiDiscoverySocket(): Promise<DiscoverySocket> {
+  // dgram.createSocket('udp4') → adapt to DiscoverySocket { send, onMessage, close }
+}
+```
+
+Export these from `src/index.ts` so the app does:
+
+```ts
+import { SonosDevice, createAgapiSoapTransport, discoverSonos } from '@agapi/sonos';
+
+const device = new SonosDevice('192.168.1.50', createAgapiSoapTransport());
+await device.play();
+```
+
+**Step C — `dev/node-transport.ts` (fast loop, no Tauri)**
+
+Same interfaces, Node builtins / global `fetch`:
+
+```ts
+import { createSocket } from 'node:dgram';
+import type { SoapTransport } from '../src/protocol/client.js';
+
+export function createNodeSoapTransport(): SoapTransport {
+  return {
+    post: async (url, soapAction, body) => {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset="utf-8"',
+          SOAPACTION: `"${soapAction}"`,
+        },
+        body,
+      });
+      return { status: res.status, body: await res.text() };
+    },
+    get: async (url) => {
+      const res = await fetch(url);
+      return { status: res.status, body: await res.text() };
+    },
+  };
+}
+```
+
+**Step D — tiny CLI scripts in `dev/` that only use the node transport**
+
+```ts
+// packages/<name>/dev/control.ts
+import { SonosDevice } from '../src/protocol/client.js';
+import { createNodeSoapTransport } from './node-transport.js';
+
+const device = new SonosDevice(process.argv[2], createNodeSoapTransport());
+await device.play();
+```
+
+Do **not** put `node-transport` in the package public export — gallery/app should use agapi only. `dev/` is for humans and CI smoke.
+
+**Checklist: is the core really independent?**
+
+| Allowed in `src/protocol/` | Forbidden in `src/protocol/` |
+|----------------------------|------------------------------|
+| your seams + pure TS/XML/regex | `@agapi/stdlib`, `agapi.*` |
+| | `node:dgram`, `node:http`, `fetch` (prefer seams) |
+| | `@tauri-apps/*`, CF, Pixi, React |
+
+`agapi-transport.ts` may import stdlib.  
+`dev/node-transport.ts` may import `node:*` / `fetch`.  
+`protocol/*` imports **neither**.
+
+#### 3c. How to verify (order matters)
+
+**1. Protocol + node harness first (fastest feedback)**  
+Needs: device on LAN, machine on same network, no Tauri.
+
+```bash
+# discovery (SSDP / mDNS / whatever your protocol uses)
+npx tsx packages/sonos/dev/discover.ts
+
+# control by IP — skip discovery once you know the address
+npx tsx packages/sonos/dev/control.ts 192.168.1.174 state
+npx tsx packages/sonos/dev/control.ts 192.168.1.174 volume 25
+npx tsx packages/sonos/dev/control.ts 192.168.1.174 play
+
+# events / callback server (if you have one)
+npx tsx packages/sonos/dev/events.ts 192.168.1.174
+# then change volume on the speaker — NOTIFY should print here
+```
+
+If this fails, fix **protocol + node transport** — not the gallery.
+
+**2. Typecheck / bundle**
+
+```bash
+npm run lint
+npm run build
+```
+
+**3. Agapi path in the real app**
+
+```bash
+npm run tauri:dev
+# Gallery → Drivers → your tool
+# Discover / add-by-IP / same actions you already proved with tsx
+```
+
+Here bugs are usually: missing host install, firewall, wrong LAN IP for callbacks (GENA), or gallery wiring — not SOAP framing.
+
+**4. Optional parity check**  
+Same IP, same action, both stacks:
+
+| Path | Command / UI |
+|------|----------------|
+| Node | `npx tsx packages/<name>/dev/control.ts <ip> state` |
+| Agapi | gallery tool → refresh / Subscribe events |
+
+Results should match. If node works and gallery does not, debug **agapi-transport** (or stdlib host), not `protocol/`.
+
+**5. Browser `npm run dev`**  
+Mock host: often **no** real multicast/HTTP server. Useful for UI layout only; do not treat it as protocol proof.
 
 #### 4. Register the gallery tool
 
