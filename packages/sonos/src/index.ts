@@ -11,7 +11,15 @@
  * callback) is the planned second stage — v1 is discovery + polling control.
  */
 
-export { SonosDevice, SONOS_CONTROL_PORT, type SoapTransport, type SonosTransportState } from './protocol/client.js';
+export {
+  SonosDevice,
+  SONOS_CONTROL_PORT,
+  type SoapTransport,
+  type SonosTransportState,
+  type BrowseResult,
+} from './protocol/client.js';
+export { SONOS_OBJECT_IDS } from './protocol/soap.js';
+export { parseDidl, type DidlItem } from './protocol/didl.js';
 export { discover, type DiscoverySocket } from './protocol/discovery.js';
 export { type SsdpResponse } from './protocol/ssdp.js';
 export { createAgapiDiscoverySocket, createAgapiSoapTransport } from './agapi-transport.js';

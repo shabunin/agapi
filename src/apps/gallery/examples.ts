@@ -952,6 +952,24 @@ const req = agapi.http.request({
 req.write(body);
 req.end();`,
     },
+    {
+      id: 'sonos-driver',
+      title: 'Driver: IP + favorites',
+      description: 'Skip SSDP, open a speaker by IP, browse Sonos Favorites (ContentDirectory), play one.',
+      code: `import { SonosDevice, createAgapiSoapTransport } from '@agapi/sonos';
+
+const device = new SonosDevice('192.168.1.174', createAgapiSoapTransport());
+const { roomName } = await device.getDescription();
+console.log('room', roomName);
+
+const favs = await device.browseFavorites();
+console.log(favs.total, 'favorites');
+for (const item of favs.items.slice(0, 5)) {
+  console.log('-', item.title, item.uri ? '✓' : 'no uri');
+}
+// Play first favorite (uses res + r:resMD metadata for TuneIn etc.)
+if (favs.items[0]?.uri) await device.playItem(favs.items[0]);`,
+    },
   ],
 };
 

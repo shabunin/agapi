@@ -26,6 +26,20 @@ export const RenderingControl: SonosService = {
   controlPath: '/MediaRenderer/RenderingControl/Control',
 };
 
+/** ContentDirectory lives on the MediaServer device (same host:1400). */
+export const ContentDirectory: SonosService = {
+  serviceType: 'urn:schemas-upnp-org:service:ContentDirectory:1',
+  controlPath: '/MediaServer/ContentDirectory/Control',
+};
+
+/** Well-known ContentDirectory ObjectIDs used by Sonos. */
+export const SONOS_OBJECT_IDS = {
+  /** Current play queue. */
+  queue: 'Q:0',
+  /** Sonos Favorites (app-saved radio stations, playlists, tracks). */
+  favorites: 'FV:2',
+} as const;
+
 function escapeXml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -62,7 +76,9 @@ export function buildSoapRequest(
  * match is enough and keeps the driver dependency-free.
  */
 export function extractTag(xml: string, tag: string): string | undefined {
-  const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
+  // Require a boundary after the tag name so `upnp:album` does not match
+  // `upnp:albumArtURI` (the old `<tag[^>]*>` form treated the longer name as a match).
+  const m = xml.match(new RegExp(`<${tag}(?=[\\s>/])[^>]*>([\\s\\S]*?)</${tag}>`));
   return m?.[1];
 }
 

@@ -1,11 +1,14 @@
 import {
   AVTransport,
+  ContentDirectory,
   RenderingControl,
+  SONOS_OBJECT_IDS,
   buildSoapRequest,
   extractFault,
   extractTag,
   type SonosService,
 } from './soap.js';
+import { parseDidl, unescapeXml, type DidlItem } from './didl.js';
 
 /**
  * Transport seam for SOAP calls — implemented over `fetch` in the node dev
@@ -23,6 +26,13 @@ export interface SonosTransportState {
   trackArtist?: string;
   trackAlbum?: string;
   trackUri?: string;
+}
+
+export interface BrowseResult {
+  items: DidlItem[];
+  total: number;
+  /** How many items were returned in this page. */
+  returned: number;
 }
 
 /** Every Sonos speaker serves its UPnP control endpoints on port 1400. */
@@ -71,6 +81,34 @@ export class SonosDevice {
     return this.call(AVTransport, 'Previous', { InstanceID: 0 });
   }
 
+  /**
+   * Point the zone at a stream/track URI and optionally attach DIDL metadata.
+   * Favorites and some services (TuneIn) require CurrentURIMetaData — bare
+   * URI alone is rejected. Empty string is fine for plain http streams.
+   */
+  setAVTransportURI(uri: string, metadata = '') {
+    return this.call(AVTransport, 'SetAVTransportURI', {
+      InstanceID: 0,
+      CurrentURI: uri,
+      CurrentURIMetaData: metadata,
+    });
+  }
+
+  /** Set URI (+ optional DIDL metadata) then Play. */
+  async playUri(uri: string, metadata = '') {
+    await this.setAVTransportURI(uri, metadata);
+    await this.play();
+  }
+
+  /**
+   * Play a ContentDirectory item (queue entry, favorite, …). Uses
+   * item.metadata when present — required for many Sonos Favorites.
+   */
+  async playItem(item: DidlItem) {
+    if (!item.uri) throw new Error(`item "${item.title ?? item.id}" has no playable URI`);
+    await this.playUri(item.uri, item.metadata ?? '');
+  }
+
   async getTransportState(): Promise<SonosTransportState> {
     const infoXml = await this.call(AVTransport, 'GetTransportInfo', { InstanceID: 0 });
     const state = extractTag(infoXml, 'CurrentTransportState') ?? 'UNKNOWN';
@@ -78,13 +116,7 @@ export class SonosDevice {
     const positionXml = await this.call(AVTransport, 'GetPositionInfo', { InstanceID: 0 });
     // TrackMetaData is DIDL-Lite XML, but it arrives entity-escaped inside the
     // SOAP response, so unescape before pulling out dc:/upnp: fields.
-    const metaEscaped = extractTag(positionXml, 'TrackMetaData') ?? '';
-    const meta = metaEscaped
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&amp;/g, '&');
+    const meta = unescapeXml(extractTag(positionXml, 'TrackMetaData') ?? '');
 
     return {
       state,
@@ -93,6 +125,36 @@ export class SonosDevice {
       trackAlbum: extractTag(meta, 'upnp:album'),
       trackUri: extractTag(positionXml, 'TrackURI'),
     };
+  }
+
+  /**
+   * Browse a ContentDirectory container (queue, favorites, library folders).
+   * Default ObjectIDs: `SONOS_OBJECT_IDS.queue` / `.favorites`.
+   */
+  async browse(objectId: string, start = 0, count = 100): Promise<BrowseResult> {
+    const xml = await this.call(ContentDirectory, 'Browse', {
+      ObjectID: objectId,
+      BrowseFlag: 'BrowseDirectChildren',
+      Filter: '*',
+      StartingIndex: start,
+      RequestedCount: count,
+      SortCriteria: '',
+    });
+    const resultXml = unescapeXml(extractTag(xml, 'Result') ?? '');
+    const items = parseDidl(resultXml);
+    return {
+      items,
+      total: Number(extractTag(xml, 'TotalMatches') ?? items.length),
+      returned: Number(extractTag(xml, 'NumberReturned') ?? items.length),
+    };
+  }
+
+  browseQueue(start = 0, count = 100) {
+    return this.browse(SONOS_OBJECT_IDS.queue, start, count);
+  }
+
+  browseFavorites(start = 0, count = 100) {
+    return this.browse(SONOS_OBJECT_IDS.favorites, start, count);
   }
 
   /** Volume is 0–100. */
