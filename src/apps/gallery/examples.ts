@@ -970,6 +970,62 @@ for (const item of favs.items.slice(0, 5)) {
 // Play first favorite (uses res + r:resMD metadata for TuneIn etc.)
 if (favs.items[0]?.uri) await device.playItem(favs.items[0]);`,
     },
+    {
+      id: 'sonos-gena',
+      title: 'GENA: subscribe to events',
+      description:
+        'Speaker pushes transport/volume changes to our agapi.http CALLBACK — no polling. CALLBACK host:port must be reachable from the speaker.',
+      code: `import {
+  SonosDevice,
+  createAgapiSoapTransport,
+  createAgapiEventServer,
+} from '@agapi/sonos';
+
+// 1) One event server per app (listens on LAN).
+//    callbackHost is auto-picked from agapi.device.getNetworkStatus().
+const events = await createAgapiEventServer({ port: 3400 });
+console.log('CALLBACK', events.callbackBaseUrl);
+// Optional health check: GET events.callbackBaseUrl + '/'
+
+// 2) Speaker (by IP — discovery is independent).
+const device = new SonosDevice('192.168.1.174', createAgapiSoapTransport());
+
+// 3) Subscribe — AVTransport + RenderingControl by default.
+//    Internally: SUBSCRIBE with CALLBACK, auto-renew, parse LastChange NOTIFY.
+const sub = await events.subscribe(device, {
+  onTransport: (c) => {
+    console.log('transport', c.transportState, c.trackTitle, c.trackArtist);
+  },
+  onVolume: (v) => console.log('volume', v),
+  onMute: (m) => console.log('mute', m),
+  // or one bag for everything:
+  // onChange: (change) => console.log(change.service, change),
+  onError: (err, ctx) => console.error(ctx.service, err.message),
+});
+console.log('SIDs', sub.sids);
+
+// 4) Leave cleanly when the panel unmounts / user leaves the room.
+// await sub.unsubscribe();
+// await events.close(); // also unsubscribes every active sub`,
+    },
+    {
+      id: 'sonos-gena-node',
+      title: 'GENA dev harness (node)',
+      description: 'Same API without Tauri — node:http callback + fetch SUBSCRIBE.',
+      code: `// packages/sonos/dev/events.ts
+// npx tsx packages/sonos/dev/events.ts 192.168.1.174
+
+import { SonosDevice } from '@agapi/sonos';
+// node helpers live under packages/sonos/dev/ (not in the package export)
+import { createNodeEventServer, createNodeSoapTransport } from './node-transport.js';
+
+const device = new SonosDevice('192.168.1.174', createNodeSoapTransport());
+const events = await createNodeEventServer({ port: 3400 });
+const sub = await events.subscribe(device, {
+  onChange: (c) => console.log(JSON.stringify(c)),
+});
+// Ctrl+C → sub.unsubscribe() + events.close()`,
+    },
   ],
 };
 
