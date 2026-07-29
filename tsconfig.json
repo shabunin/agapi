@@ -52,6 +52,12 @@
       ],
       "@agapi/sonos/*": [
         "packages/sonos/src/*"
+      ],
+      "@agapi/driver-template": [
+        "packages/driver-template/src/index.ts"
+      ],
+      "@agapi/driver-template/*": [
+        "packages/driver-template/src/*"
       ]
     },
     "allowImportingTsExtensions": true,

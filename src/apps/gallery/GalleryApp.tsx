@@ -5,6 +5,7 @@ import {
   Beaker,
   Bell,
   Bluetooth,
+  Cable,
   Cpu,
   Fingerprint,
   FolderOpen,
@@ -58,6 +59,7 @@ import GesturesTool from './tools/GesturesTool';
 
 // Keep driver tools out of the main gallery chunk — loaded only when opened.
 const SonosTool = lazy(() => import('./tools/SonosTool'));
+const SimpleDeviceTool = lazy(() => import('./tools/SimpleDeviceTool'));
 
 // matter.js pulls in ~2MB of protocol/crypto code — lazy-load so it's only
 // fetched when someone actually opens this tool, not on every app boot.
@@ -88,6 +90,7 @@ const ICONS: Record<Exclude<GalleryToolId, 'hub'>, LucideIcon> = {
   gestures: Hand,
   matter: Radar,
   sonos: Speaker,
+  'simple-device': Cable,
 };
 
 const GROUP_LABEL: Record<GalleryGroup, string> = {
@@ -218,6 +221,19 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
         }
       >
         <SonosTool onBack={() => setTool('hub')} />
+      </Suspense>
+    );
+  }
+  if (tool === 'simple-device') {
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-500 text-sm">
+            Loading SimpleDevice…
+          </div>
+        }
+      >
+        <SimpleDeviceTool onBack={() => setTool('hub')} />
       </Suspense>
     );
   }

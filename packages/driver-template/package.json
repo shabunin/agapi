@@ -1,0 +1,16 @@
+{
+  "name": "@agapi/driver-template",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Copy-paste driver skeleton: SimpleDevice (power on|off|?) over line-oriented TCP — transport-agnostic core + agapi/node seams",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@agapi/stdlib": "0.0.1"
+  }
+}

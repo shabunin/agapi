@@ -43,7 +43,8 @@ export type ExampleToolId =
   | 'web-animations'
   | 'gestures'
   | 'matter'
-  | 'sonos';
+  | 'sonos'
+  | 'simple-device';
 
 export const TOOL_EXAMPLES: Record<ExampleToolId, CodeSnippet[]> = {
   sockets: [
@@ -1076,6 +1077,45 @@ const sub = await events.subscribe(device, {
   onChange: (c) => console.log(JSON.stringify(c)),
 });
 // Ctrl+C → sub.unsubscribe() + events.close()`,
+    },
+  ],
+
+  'simple-device': [
+    {
+      id: 'tpl-agapi',
+      title: 'Agapi: power on / off / ?',
+      description: 'Production path — TcpTransport over agapi.net, same API as the node harness.',
+      code: `import {
+  SimpleDevice,
+  createAgapiTcpTransport,
+} from '@agapi/driver-template';
+
+const device = new SimpleDevice(createAgapiTcpTransport(), {
+  host: '127.0.0.1',
+  port: 2300,
+});
+await device.connect();
+console.log(await device.powerOn());     // → "OK"
+console.log(await device.queryPower());  // → { state: 'on', raw: 'power on' }
+await device.powerOff();
+device.disconnect();`,
+    },
+    {
+      id: 'tpl-node',
+      title: 'Node harness + mock',
+      description: 'No Tauri: mock-server + control.ts use node:net. Same protocol core.',
+      code: `# terminal 1 — fake device
+npx tsx packages/driver-template/dev/mock-server.ts 2300
+
+# terminal 2 — driver CLI
+npx tsx packages/driver-template/dev/control.ts 127.0.0.1 2300 power on
+npx tsx packages/driver-template/dev/control.ts 127.0.0.1 2300 power ?
+npx tsx packages/driver-template/dev/control.ts 127.0.0.1 2300 power off
+
+# structure to copy for a real brand:
+#   src/protocol/     ← pure (no agapi / node)
+#   src/agapi-transport.ts
+#   dev/node-transport.ts`,
     },
   ],
 };

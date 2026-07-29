@@ -225,4 +225,13 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     accent: 'emerald',
     group: 'drivers',
   },
+  {
+    id: 'simple-device',
+    title: 'SimpleDevice',
+    blurb: 'Copy-paste TCP/line driver skeleton — power on|off|? over CRLF, agapi.net + node:net + mock server.',
+    surface: '@agapi/driver-template · agapi.net',
+    status: 'lab',
+    accent: 'cyan',
+    group: 'drivers',
+  },
 ];

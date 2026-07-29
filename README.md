@@ -50,6 +50,7 @@ Use existing packages as templates:
 
 | Package | Pattern |
 |---------|---------|
+| [`packages/driver-template`](packages/driver-template) | **Start here** — `SimpleDevice` (power on/off/?) + agapi/node TCP seams + mock-server |
 | [`packages/sonos`](packages/sonos) | Thin UPnP protocol core + agapi transports + gallery tool + optional `dev/` tsx harness |
 | [`packages/matterjs`](packages/matterjs) | Heavier vendor/lib + lazy-loaded gallery tool |
 
@@ -363,6 +364,7 @@ Admin path to production: **`feat/agapi-drivers` → `main`** when the driver se
 |---------|---------|--------|
 | `@agapi/matterjs` | Drivers → Matter | mDNS discovery, commissioning, device control; lazy-loaded |
 | `@agapi/sonos` | Drivers → Sonos | SSDP + SOAP + ContentDirectory + GENA events; `dev/` harness |
+| `@agapi/driver-template` | Drivers → SimpleDevice | **Copy-paste starter**: line TCP `power on\|off\|?` (CRLF), `SimpleDevice` + agapi.net / node:net + mock-server |
 
 ---
 
