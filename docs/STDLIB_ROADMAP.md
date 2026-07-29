@@ -51,7 +51,7 @@ Globals after `installStdlib` today:
 `agapi.device` is `getNetworkStatus()` + `watchNetwork()` only so far (see C1). `agapi.biometric`/`agapi.nfc` are **mobile-only** (Android/iOS — not compiled into desktop builds at all); `agapi.haptics` has a mobile host + `navigator.vibrate` browser fallback; `agapi.notifications` and `agapi.fs` work everywhere.
 
 Planned additions (names may refine):  
-**`agapi.sensors`**, **`agapi.crypto`**, later camera/bluetooth. More `agapi.device` fields (battery, brightness, volume, identity — C2).  
+**`agapi.sensors`**, **`agapi.crypto`**, later camera/bluetooth. More `agapi.device` fields (battery, brightness, volume, identity — C2). **`agapi.barcode`** (QR/barcode scan, C11) — official plugin exists, just not implemented yet, unlike C2/C3/C9.  
 ⏸ **C2 (device props), C3 (sensors), and bluetooth (C9) are blocked**: no official `@tauri-apps/plugin-*` covers any of these today, and rolling a custom Rust/host implementation isn't a current priority. Re-check the official Tauri plugin list periodically — pick these back up once an official plugin lands.
 
 ---
@@ -242,6 +242,21 @@ Gallery already probes browser Web Crypto. Later:
 - `agapi.crypto` thin wrapper (random, hash, hmac) for scripts  
 - Matter-grade AES-CCM stays in matter.js / drivers, not necessarily stdlib
 
+#### C11 — Barcode / QR scanner (P2) — planned, not blocked
+
+| Op | Status |
+|----|--------|
+| `agapi.barcode.scan(options?)` | ❌ not started |
+| `agapi.barcode.isAvailable()` | ❌ not started |
+
+Official plugin already exists — <https://tauri.app/plugin/barcode-scanner/> (Android/iOS,
+same mobile-only shape as C6-C8). Unlike C2/C3/C9 this isn't blocked on Tauri, just not
+implemented yet.
+
+Motivation isn't gallery-first this time: Matter commissioning QR codes (`MT:...` payloads)
+are exactly what this scans. See **Driver libraries → Matter → item 2** below — this is the
+first stdlib capability pulled in by a driver package's real need.
+
 ### Phase D — Streams (T2) — only if needed
 
 Minimal Duplex / `drain` if third-party code or production backpressure requires it.  
@@ -255,6 +270,73 @@ Otherwise framing stays in drivers / CF systems.
 - `require()` module loader  
 - Exact Node `errno` matrix  
 - Full WebRTC stack inside stdlib  
+
+---
+
+## Driver libraries (sibling packages, not stdlib)
+
+Per principle 6 — protocols (Matter, AV brands) live in `@agapi/*` sibling packages, not
+stdlib. First one shipped, with real first results.
+
+### Matter (`@agapi/matterjs`) — 🟡 first results in
+
+Wraps upstream `matter.js` (vendored as a shallow git submodule under
+`packages/matterjs/vendor/matter.js`) as a Matter **Controller** driver (agapi commissions
+and controls *other* Matter accessories) — not a Device/accessory role, not yet. `Network` is
+the only real adapter matter.js needed on top of agapi (`agapi.dgram` / `agapi.device`);
+Crypto and Time self-install via `crypto.subtle`.
+
+**Working today, verified live against a physical Nanoleaf RGB Matter light:**
+
+- Real mDNS discovery of commissionable devices (`_matterc._udp`) over `agapi.dgram`
+- Full PASE/CASE **commissioning** against a real device (not a mock/simulator)
+- Device control: OnOff, ColorControl (hue+saturation), LevelControl (brightness)
+- Multi-admin: Basic + Enhanced commissioning window (hand the device to a second
+  controller — e.g. a phone's Matter app — without giving up agapi's own fabric)
+- Persistence via `agapi.fs` (fabric + commissioned nodes survive a restart), or
+  in-memory for a throwaway session
+- Gallery lab: `src/apps/gallery/tools/MatterTool.tsx` — lazy-loaded (`React.lazy` +
+  `Suspense`), since matter.js is ~2.2MB / ~520KB gzip and shouldn't cost anything for users
+  who never open it
+
+**Not yet — next roadmap items for Matter specifically:**
+
+1. **Device (accessory) role demo.** Everything above is Controller-only. A gallery panel
+   that presents *itself* as a Matter device (e.g. a virtual light that Apple Home / Google
+   Home / any other controller can discover, commission, and control) is a distinct,
+   unbuilt direction — matter.js has a `ServerNode`/Device role too; this is a second entry
+   point into `@agapi/matterjs`, not a rewrite of the controller side.
+2. **QR-code commissioning scanner (mobile).** Manual pairing codes work today; real Matter
+   onboarding is normally a QR code (`MT:...` payload) read by camera. Needs **C11**
+   (`agapi.barcode`) shipped first, then a scan → decode → `commissionNode()` flow added to
+   the gallery tool.
+3. **BLE transport.** matter.js also supports BLE-first commissioning (before a device even
+   has an IP), not just today's on-network-only discovery. Blocked on Bluetooth in stdlib
+   (**C9** — no official Tauri plugin yet); revisit once that unblocks.
+
+### Raw-script access: `agapi.use()` (planned, not yet built)
+
+CF/iViewer-style projects are raw injected `<script>` tags (`loadProject.ts`) with no
+`import` available to them — but driver packages like `@agapi/matterjs` are real ESM
+dependencies, and deliberately lazy-loaded (same `React.lazy()` pattern used for
+`MatterTool`/`CfApp`), so they can't just be statically baked into the `agapi.*` global like
+the rest of stdlib without undoing that.
+
+Plan: an on-demand installer call available to project scripts —
+
+```js
+await agapi.use('matter');
+const controller = await agapi.matter.createController({ id: 'my-project', label: 'My Project' });
+```
+
+`agapi.use(name)` dynamically imports the driver's own `install*()` (e.g.
+`@agapi/matterjs`'s `installMatterJs()`) and attaches the result as `agapi.<name>` — the
+first call pays the chunk-download cost, later calls in the same session are free (module
+cache). This keeps the zero-build CF/iViewer authoring model intact while preserving
+lazy-loading. A declarative form (project manifest lists needed drivers up front,
+`loadProject()` preloads them before running any script) is a possible later evolution if
+there's ever a real need to know a project's dependencies ahead of running its scripts — not
+needed to start.
 
 ---
 
@@ -272,8 +354,9 @@ agapi
 ├── biometric    # checkStatus + authenticate — mobile only               [shipped]
 ├── haptics      # impact/notification/selection/vibrate — mobile + browser vibrate fallback [shipped]
 ├── crypto       # optional thin WebCrypto/host wrapper                   [planned]
+├── barcode      # QR/barcode scan (official plugin-barcode-scanner) — mobile only [planned, C11]
 ├── camera / bluetooth   # mobile                                         [blocked — no official plugin]
-└── drivers      # later install from @agapi/drivers
+└── matter, …    # driver namespaces, installed on demand via agapi.use('matter') [planned — see Driver libraries]
 ```
 
 cf-runtime (later, thin):
@@ -339,8 +422,14 @@ Missing host capability → clear error in façade (same pattern as `mdns` / `ht
 | 7 | `feat/agapi-biometric` | ✅ shipped: checkStatus + authenticate (mobile-only) + gallery |
 | 8 | `feat/agapi-nfc` | ✅ shipped: isAvailable/scan/write + gallery (mobile-only) |
 | 9 | `feat/cf-bridge-device` | **only then** map CF.* → agapi (optional) |
+| 10 | `feat/agapi-barcode` | ❌ not started — QR/barcode scan via official `@tauri-apps/plugin-barcode-scanner`, mobile-only (C11) |
 
 Do **not** mix cf-runtime GUI changes into platform host PRs.
+
+Driver libraries (Matter, …) are a separate track from this table entirely — sibling
+packages, not stdlib PRs (`feat/agapi-drivers-matter` and its continuations). Same rule
+applies in spirit: don't mix unrelated stdlib/cf-runtime fixes into a driver branch, or
+driver work into a stdlib branch.
 
 ---
 
@@ -372,3 +461,4 @@ Do **not** mix cf-runtime GUI changes into platform host PRs.
 | 2026-07-28 | **C5-C8 shipped:** `agapi.notifications` (`@tauri-apps/plugin-notification`, desktop+mobile), `agapi.biometric` and `agapi.nfc` (mobile-only — Android/iOS, not compiled into desktop builds at all: `target.'cfg(android/ios)'.dependencies` in `Cargo.toml`), `agapi.haptics` (mobile host + `navigator.vibrate` browser fallback in the stdlib facade). Verified real permission defaults from each plugin's own `permissions/default.toml` rather than trusting doc summaries — `haptics` has **no** default set at all (every `allow-*` must be listed explicitly), `os:default`/`biometric:default`/`nfc:default` exclude hostname/write respectively. New `capabilities/mobile.json` (`platforms: ["android","iOS"]`) holds the mobile-only permissions so desktop capabilities stay clean. Sensors/fs/Bluetooth gallery stubs unchanged (still genuinely not implemented) |
 | 2026-07-28 | **C2/C3/C9 marked blocked:** device properties (battery/brightness/volume/identity), sensors (accel/gyro/attitude/heading/location), and Bluetooth have no official `@tauri-apps/plugin-*` today. User decision: don't roll custom Rust hosts for these — not a priority. Periodically re-check the official Tauri plugin registry and revisit once one lands. Camera stays pulled (no host plan) |
 | 2026-07-28 | **C4 shipped:** `agapi.fs` on official `@tauri-apps/plugin-fs` — `readFile`/`readTextFile`/`writeFile`/`appendFile`/`mkdir`/`readdir`/`stat`/`remove`/`exists`, scoped via `baseDir` (appData/appConfig/appLocalData/appCache/appLog/temp). Found (by reading the plugin's own `permissions/*.toml`, not docs) that `capabilities/default.json` had `fs:read-all`/`fs:write-all` — genuinely unrestricted whole-disk access, not the narrower allowlist entries sitting next to them. User chose to tighten immediately: narrowed to `fs:allow-app-*-recursive` + `fs:allow-temp-write-recursive`, and added a new `fs_allow_read_path` Rust command (`AppHandle::fs_scope()`) so the CF project-open picker can still grant runtime read access to an arbitrary user-picked path without widening the static ACL — relies on `tauri-plugin-fs::resolve_path` ORing the static scope with this runtime scope. Gallery `fs` stub replaced with a real read/write/mkdir/readdir/stat/remove lab |
+| 2026-07-29 | **Driver libraries section added — Matter (`@agapi/matterjs`) first results:** real mDNS discovery + full PASE/CASE commissioning + OnOff/ColorControl/LevelControl device control + multi-admin commissioning windows (Basic/Enhanced) + `agapi.fs` persistence, all verified live against a physical Nanoleaf RGB Matter light. Controller role only so far. Added three forward roadmap items for Matter: (1) a Device/accessory-role demo panel (matter.js `ServerNode`, not just Controller), (2) QR-code commissioning scanner for mobile (needs C11), (3) BLE transport (needs C9, currently blocked). Added **C11 — barcode/QR scanner** (`@tauri-apps/plugin-barcode-scanner`) — unlike C2/C3/C9 this has an official plugin already, just not implemented yet; motivated directly by Matter's QR commissioning need. Documented the planned `agapi.use(name)` on-demand driver installer for CF/iViewer-style raw project scripts (no `import` available to them) — keeps the zero-build authoring model while preserving lazy-loading of heavy driver packages |
