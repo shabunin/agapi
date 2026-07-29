@@ -1,4 +1,5 @@
 import { net } from '@agapi/stdlib';
+import type { ITcpSocket } from '@agapi/stdlib/net/types';
 import type { TcpConnection, TcpTransport } from './protocol/transport.js';
 
 /**
@@ -6,10 +7,10 @@ import type { TcpConnection, TcpTransport } from './protocol/transport.js';
  * Mirror of `dev/node-transport.ts`; keep them in lockstep when you extend the seam.
  */
 
-function adaptSocket(socket: any): TcpConnection {
+function adaptSocket(socket: ITcpSocket): TcpConnection {
   return {
     write(data) {
-      socket.write(typeof data === 'string' ? data : data);
+      socket.write(data);
     },
     onData(cb) {
       socket.on('data', (chunk: Uint8Array | string | number[]) => {
@@ -23,8 +24,10 @@ function adaptSocket(socket: any): TcpConnection {
       });
     },
     onClose(cb) {
+      // host-tauri's real socket emits both 'end' and 'close' on disconnect
+      // (packages/host-tauri/src/net/socket.ts) — listen to 'close' only, it's
+      // the one every backend (mock + tauri) guarantees.
       socket.on('close', () => cb());
-      socket.on('end', () => cb());
     },
     onError(cb) {
       socket.on('error', (err: Error) => cb(err instanceof Error ? err : new Error(String(err))));

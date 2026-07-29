@@ -3,12 +3,18 @@
  * Devices often deliver partial chunks — never assume one write == one line.
  */
 
+/** Guard against a device that never sends a line terminator. */
+const MAX_BUFFERED_CHARS = 64 * 1024;
+
 export class LineBuffer {
   private buf = '';
 
   /** Push a decoded chunk; return complete lines (without trailing CR/LF). */
   push(text: string): string[] {
     this.buf += text;
+    if (this.buf.length > MAX_BUFFERED_CHARS) {
+      throw new Error(`LineBuffer: no line terminator within ${MAX_BUFFERED_CHARS} chars`);
+    }
     const lines: string[] = [];
     for (;;) {
       const crlf = this.buf.indexOf('\r\n');

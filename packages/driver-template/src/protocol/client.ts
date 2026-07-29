@@ -25,12 +25,21 @@ export class SimpleDevice {
   readonly port: number;
   private readonly responseTimeoutMs: number;
   private conn: TcpConnection | null = null;
+  private connecting: Promise<void> | null = null;
   private lines = new LineBuffer();
+  // TextDecoder holds carry-over bytes for a multi-byte char split across chunks —
+  // must be one instance for the connection's lifetime, not per-chunk.
+  private decoder = new TextDecoder();
   private waiters: Array<{
     resolve: (line: string) => void;
     reject: (err: Error) => void;
     timer: ReturnType<typeof setTimeout>;
   }> = [];
+  // Replies still owed by the device for requests we've already given up on
+  // (timed out). The wire is still FIFO, so the next line(s) in are those
+  // late replies, not the answer to whatever's queued next — drop them
+  // instead of misattributing them to the next real waiter.
+  private stale = 0;
 
   constructor(
     private readonly transport: TcpTransport,
@@ -45,15 +54,38 @@ export class SimpleDevice {
     return this.conn !== null;
   }
 
-  async connect(): Promise<void> {
-    if (this.conn) return;
+  connect(): Promise<void> {
+    if (this.conn) return Promise.resolve();
+    // Coalesce concurrent callers onto one in-flight attempt — otherwise each
+    // opens its own socket and only the last one ends up on `this.conn`.
+    if (!this.connecting) {
+      this.connecting = this.doConnect().finally(() => {
+        this.connecting = null;
+      });
+    }
+    return this.connecting;
+  }
+
+  private async doConnect(): Promise<void> {
     const conn = await this.transport.connect(this.host, this.port);
     this.conn = conn;
     this.lines.clear();
+    this.decoder = new TextDecoder();
+    this.stale = 0;
 
     conn.onData((chunk) => {
-      const text = new TextDecoder().decode(chunk);
-      for (const line of this.lines.push(text)) {
+      const text = this.decoder.decode(chunk, { stream: true });
+      let lines: string[];
+      try {
+        lines = this.lines.push(text);
+      } catch (err) {
+        // Unterminated stream (see LineBuffer's MAX_BUFFERED_CHARS) — treat like
+        // any other transport error rather than growing memory forever.
+        this.failAll(err instanceof Error ? err : new Error(String(err)));
+        conn.destroy();
+        return;
+      }
+      for (const line of lines) {
         this.deliver(line);
       }
     });
@@ -61,6 +93,7 @@ export class SimpleDevice {
       this.failAll(err);
     });
     conn.onClose(() => {
+      if (this.conn !== conn) return; // stale handler from a superseded connection
       this.conn = null;
       this.failAll(new Error('connection closed'));
     });
@@ -104,6 +137,7 @@ export class SimpleDevice {
       const timer = setTimeout(() => {
         const i = this.waiters.findIndex((w) => w.timer === timer);
         if (i >= 0) this.waiters.splice(i, 1);
+        this.stale++;
         reject(new Error(`timeout waiting for reply (${this.responseTimeoutMs}ms)`));
       }, this.responseTimeoutMs);
       this.waiters.push({ resolve, reject, timer });
@@ -111,6 +145,10 @@ export class SimpleDevice {
   }
 
   private deliver(line: string) {
+    if (this.stale > 0) {
+      this.stale--; // late reply to an abandoned request — see `stale` above
+      return;
+    }
     const w = this.waiters.shift();
     if (!w) return; // unsolicited line — ignore for this template
     clearTimeout(w.timer);
