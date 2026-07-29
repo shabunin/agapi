@@ -18,6 +18,7 @@ import {
   Radar,
   Radio,
   ScanSearch,
+  Speaker,
   Server,
   Share2,
   Shield,
@@ -54,6 +55,7 @@ import WebrtcInfo from './tools/WebrtcInfo';
 import WebcodecsInfo from './tools/WebcodecsInfo';
 import WebAnimationsTool from './tools/WebAnimationsTool';
 import GesturesTool from './tools/GesturesTool';
+import SonosTool from './tools/SonosTool';
 
 // matter.js pulls in ~2MB of protocol/crypto code — lazy-load so it's only
 // fetched when someone actually opens this tool, not on every app boot.
@@ -83,6 +85,7 @@ const ICONS: Record<Exclude<GalleryToolId, 'hub'>, LucideIcon> = {
   'web-animations': Sparkles,
   gestures: Hand,
   matter: Radar,
+  sonos: Speaker,
 };
 
 const GROUP_LABEL: Record<GalleryGroup, string> = {
@@ -202,6 +205,9 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
         <MatterTool onBack={() => setTool('hub')} />
       </Suspense>
     );
+  }
+  if (tool === 'sonos') {
+    return <SonosTool onBack={() => setTool('hub')} />;
   }
 
   return (

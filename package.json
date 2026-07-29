@@ -29,6 +29,7 @@
     "@agapi/host-protocol": "0.0.1",
     "@agapi/host-tauri": "0.0.1",
     "@agapi/matterjs": "0.0.1",
+    "@agapi/sonos": "0.0.1",
     "@agapi/stdlib": "0.0.1",
     "@google/genai": "^1.29.0",
     "@matter/general": "^0.17.7",

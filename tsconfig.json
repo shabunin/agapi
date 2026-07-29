@@ -46,6 +46,12 @@
       ],
       "@agapi/matterjs/*": [
         "packages/matterjs/src/*"
+      ],
+      "@agapi/sonos": [
+        "packages/sonos/src/index.ts"
+      ],
+      "@agapi/sonos/*": [
+        "packages/sonos/src/*"
       ]
     },
     "allowImportingTsExtensions": true,

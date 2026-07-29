@@ -26,7 +26,8 @@ export type GalleryToolId =
   | 'crypto'
   | 'web-animations'
   | 'gestures'
-  | 'matter';
+  | 'matter'
+  | 'sonos';
 
 export interface GalleryToolMeta {
   id: Exclude<GalleryToolId, 'hub'>;
