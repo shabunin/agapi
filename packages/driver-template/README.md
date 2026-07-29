@@ -2,9 +2,10 @@
 
 Copy-paste starting point for a line-oriented TCP driver. `SimpleDevice`
 (`power on|off|?` over CRLF) is a stand-in — replace the protocol, keep the
-shape. See the root [README §3](../../README.md) for the full driver pattern
-this follows (why `src/protocol/` stays transport-agnostic, verification
-order, etc.); this file is just the mechanical checklist for renaming.
+shape. See [`docs/DRIVERS.md`](../../docs/DRIVERS.md) for the full driver
+pattern this follows (why `src/protocol/` stays transport-agnostic,
+verification order, etc.); this file is just the mechanical checklist for
+renaming.
 
 ## Copying this package
 
@@ -17,8 +18,8 @@ order, etc.); this file is just the mechanical checklist for renaming.
    protocol (framing/timeouts/reconnect logic below can usually stay as-is)
 6. `dev/mock-server.ts`, `dev/control.ts` — update to the new commands
 7. Gallery wiring — `src/apps/gallery/types.ts`, `catalog.ts`,
-   `GalleryApp.tsx`, `examples.ts`, `tools/<Name>Tool.tsx` (see root README
-   §4 for the exact table)
+   `GalleryApp.tsx`, `examples.ts`, `tools/<Name>Tool.tsx` (see
+   `docs/DRIVERS.md` §4 for the exact table)
 8. `npm run lint && npm run build`, then smoke-test with `dev/mock-server.ts`
    before touching real hardware
 
