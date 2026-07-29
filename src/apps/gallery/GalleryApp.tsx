@@ -17,6 +17,7 @@ import {
   Plug,
   Radio,
   ScanSearch,
+  Speaker,
   Server,
   Share2,
   Shield,
@@ -53,6 +54,7 @@ import WebrtcInfo from './tools/WebrtcInfo';
 import WebcodecsInfo from './tools/WebcodecsInfo';
 import WebAnimationsTool from './tools/WebAnimationsTool';
 import GesturesTool from './tools/GesturesTool';
+import SonosTool from './tools/SonosTool';
 
 const ICONS: Record<Exclude<GalleryToolId, 'hub'>, LucideIcon> = {
   sockets: Radio,
@@ -77,12 +79,14 @@ const ICONS: Record<Exclude<GalleryToolId, 'hub'>, LucideIcon> = {
   crypto: KeyRound,
   'web-animations': Sparkles,
   gestures: Hand,
+  sonos: Speaker,
 };
 
 const GROUP_LABEL: Record<GalleryGroup, string> = {
   network: 'Network',
   device: 'Device',
   browser: 'Browser APIs',
+  drivers: 'Drivers',
 };
 
 const ACCENT: Record<string, string> = {
@@ -183,6 +187,9 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
   if (tool === 'gestures') {
     return <GesturesTool onBack={() => setTool('hub')} />;
   }
+  if (tool === 'sonos') {
+    return <SonosTool onBack={() => setTool('hub')} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -223,7 +230,7 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
           </p>
         </div>
 
-        {(['network', 'device', 'browser'] as const).map((group) => {
+        {(['network', 'device', 'browser', 'drivers'] as const).map((group) => {
           const tools = GALLERY_TOOLS.filter((t) => t.group === group);
           if (tools.length === 0) return null;
           return (

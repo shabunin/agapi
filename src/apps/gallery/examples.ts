@@ -41,7 +41,8 @@ export type ExampleToolId =
   | 'webcodecs'
   | 'crypto'
   | 'web-animations'
-  | 'gestures';
+  | 'gestures'
+  | 'sonos';
 
 export const TOOL_EXAMPLES: Record<ExampleToolId, CodeSnippet[]> = {
   sockets: [
@@ -893,6 +894,63 @@ el.addEventListener('touchmove', (e) => {
 });
 
 console.log('handlers attached — two-finger scale/rotate, tracked by Touch.identifier');`,
+    },
+  ],
+
+  sonos: [
+    {
+      id: 'sonos-ssdp',
+      title: 'SSDP discover',
+      description: 'What the driver does under the hood: M-SEARCH on agapi.dgram, replies come back unicast.',
+      code: `// Sonos discovery = plain SSDP over agapi.dgram (no library needed)
+const socket = agapi.dgram.createSocket('udp4');
+const search = [
+  'M-SEARCH * HTTP/1.1',
+  'HOST: 239.255.255.250:1900',
+  'MAN: "ssdp:discover"',
+  'MX: 3',
+  'ST: urn:schemas-upnp-org:device:ZonePlayer:1',
+  '', '',
+].join('\\r\\n');
+
+socket.on('message', (msg, rinfo) => {
+  const text = new TextDecoder().decode(msg);
+  if (text.includes('ZonePlayer')) console.log('Sonos at', rinfo.address);
+});
+socket.bind(0, () => {
+  socket.send(new TextEncoder().encode(search), 1900, '239.255.255.250');
+  console.log('M-SEARCH sent, replies for ~3s…');
+  setTimeout(() => socket.close(), 4000);
+});`,
+    },
+    {
+      id: 'sonos-soap',
+      title: 'SOAP control',
+      description: 'Control = HTTP POST to port 1400 with a SOAPACTION header — here: read the volume.',
+      code: `// Every Sonos speaker answers UPnP SOAP on port 1400 — no auth
+const ip = '192.168.1.50'; // ← a speaker's IP (see SSDP discover)
+const body = '<?xml version="1.0" encoding="utf-8"?>' +
+  '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" ' +
+  's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>' +
+  '<u:GetVolume xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1">' +
+  '<InstanceID>0</InstanceID><Channel>Master</Channel>' +
+  '</u:GetVolume></s:Body></s:Envelope>';
+
+const req = agapi.http.request({
+  url: 'http://' + ip + ':1400/MediaRenderer/RenderingControl/Control',
+  method: 'POST',
+  headers: {
+    'Content-Type': 'text/xml; charset="utf-8"',
+    SOAPACTION: '"urn:schemas-upnp-org:service:RenderingControl:1#GetVolume"',
+  },
+}, (res) => {
+  res.on('data', (chunk) => {
+    const xml = new TextDecoder().decode(chunk);
+    console.log('volume:', /<CurrentVolume>(\\d+)<\\/CurrentVolume>/.exec(xml)?.[1]);
+  });
+});
+req.write(body);
+req.end();`,
     },
   ],
 };

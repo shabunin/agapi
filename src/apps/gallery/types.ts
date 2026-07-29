@@ -1,6 +1,6 @@
 export type ToolStatus = 'live' | 'lab' | 'stub' | 'info';
 
-export type GalleryGroup = 'network' | 'device' | 'browser';
+export type GalleryGroup = 'network' | 'device' | 'browser' | 'drivers';
 
 export type GalleryToolId =
   | 'hub'
@@ -25,7 +25,8 @@ export type GalleryToolId =
   | 'webcodecs'
   | 'crypto'
   | 'web-animations'
-  | 'gestures';
+  | 'gestures'
+  | 'sonos';
 
 export interface GalleryToolMeta {
   id: Exclude<GalleryToolId, 'hub'>;

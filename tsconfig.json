@@ -40,6 +40,12 @@
       ],
       "@agapi/cf-runtime/*": [
         "packages/cf-runtime/src/*"
+      ],
+      "@agapi/sonos": [
+        "packages/sonos/src/index.ts"
+      ],
+      "@agapi/sonos/*": [
+        "packages/sonos/src/*"
       ]
     },
     "allowImportingTsExtensions": true,

@@ -205,4 +205,15 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     accent: 'lime',
     group: 'browser',
   },
+
+  // ── Drivers ───────────────────────────────────────────────
+  {
+    id: 'sonos',
+    title: 'Sonos',
+    blurb: 'Discover speakers via SSDP, then play/pause/volume/mute over UPnP SOAP — real devices on your LAN.',
+    surface: '@agapi/sonos · agapi.dgram + agapi.http',
+    status: 'lab',
+    accent: 'emerald',
+    group: 'drivers',
+  },
 ];
