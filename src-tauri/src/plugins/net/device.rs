@@ -5,9 +5,10 @@
 //! that needs platform-specific Wi-Fi APIs we don't have a host for yet.
 //!
 //! Watch is backed by `if_addrs::IfChangeNotifier`, which does not exist on
-//! Apple platforms (see its own cfg gate) — this project doesn't build for
-//! those today, so that's a future-you problem: adding a macOS/iOS target
-//! will need a different watch backend here.
+//! Apple platforms (see its own cfg gate). `device_watch_network_start` has
+//! a `#[cfg(target_vendor = "apple")]` stub below that returns an error
+//! instead — `getNetworkStatus()` still works there, only the push-on-change
+//! watch is unavailable until a real macOS/iOS backend is written.
 
 use serde::Serialize;
 use std::collections::HashMap;
@@ -128,19 +129,21 @@ pub fn device_network_status() -> Result<NetworkStatusPayload, String> {
 /// Start watching for interface changes (Wi-Fi/Ethernet connect, disconnect,
 /// address change, …). Emits a fresh snapshot on `plugin:device:network`
 /// whenever the OS reports a real change. `watch_id` is supplied by the
-/// caller so it can register its event listener before this resolves —
-/// `IfChangeNotifier::new()` + the first poll happen synchronously-ish fast
-/// enough that an event could otherwise arrive before an id assigned from
-/// the return value is known.
+/// caller so it can register its event listener before this resolves.
+///
+/// `IfChangeNotifier` is built **on the watch thread itself**, not before
+/// `spawn` — on Windows its handle type holds raw pointers and isn't `Send`,
+/// so it can never cross the thread boundary in a `move` closure. Startup
+/// success/failure is reported back over a channel so this command still
+/// resolves synchronously once the watch is either running or has failed,
+/// same as before.
+#[cfg(not(target_vendor = "apple"))]
 #[tauri::command]
 pub fn device_watch_network_start<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, DeviceState>,
     watch_id: Option<String>,
 ) -> Result<String, String> {
-    let mut notifier =
-        if_addrs::IfChangeNotifier::new().map_err(|e| format!("IfChangeNotifier::new: {e}"))?;
-
     let id = watch_id
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -153,9 +156,21 @@ pub fn device_watch_network_start<R: Runtime>(
         .insert(id.clone(), stop_flag.clone());
 
     let id2 = id.clone();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
     std::thread::Builder::new()
         .name(format!("device-network-watch-{id}"))
         .spawn(move || {
+            let mut notifier = match if_addrs::IfChangeNotifier::new() {
+                Ok(n) => {
+                    let _ = ready_tx.send(Ok(()));
+                    n
+                }
+                Err(e) => {
+                    let _ = ready_tx.send(Err(format!("IfChangeNotifier::new: {e}")));
+                    return;
+                }
+            };
+
             loop {
                 if stop_flag.load(Ordering::Relaxed) {
                     break;
@@ -193,7 +208,31 @@ pub fn device_watch_network_start<R: Runtime>(
         })
         .map_err(|e| format!("spawn watch thread: {e}"))?;
 
-    Ok(id)
+    match ready_rx.recv() {
+        Ok(Ok(())) => Ok(id),
+        Ok(Err(e)) => {
+            state.watches.lock().map_err(|e| e.to_string())?.remove(&id);
+            Err(e)
+        }
+        Err(_) => {
+            state.watches.lock().map_err(|e| e.to_string())?.remove(&id);
+            Err("watch thread exited before confirming start".to_string())
+        }
+    }
+}
+
+/// `if_addrs::IfChangeNotifier` doesn't exist on Apple platforms at all (see
+/// its own cfg gate) — no OS-level watch backend wired up here yet.
+/// `getNetworkStatus()` still works everywhere; only the push-on-change
+/// watch is unavailable on macOS/iOS for now.
+#[cfg(target_vendor = "apple")]
+#[tauri::command]
+pub fn device_watch_network_start<R: Runtime>(
+    _app: AppHandle<R>,
+    _state: State<'_, DeviceState>,
+    _watch_id: Option<String>,
+) -> Result<String, String> {
+    Err("agapi.device.watchNetwork is not supported on macOS yet".to_string())
 }
 
 #[tauri::command]
