@@ -234,4 +234,15 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
     accent: 'cyan',
     group: 'drivers',
   },
+
+  // ── Examples ──────────────────────────────────────────────
+  {
+    id: 'webrtc-p2p',
+    title: 'WebRTC P2P (LAN)',
+    blurb: 'Serverless peer-to-peer over the local network — mDNS discovery + local WebSocket signaling, no STUN/TURN, no cloud.',
+    surface: 'RTCPeerConnection + agapi.mdns + agapi.http.WebSocketServer/WebSocket',
+    status: 'lab',
+    accent: 'fuchsia',
+    group: 'examples',
+  },
 ];

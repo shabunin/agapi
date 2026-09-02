@@ -1,6 +1,6 @@
 export type ToolStatus = 'live' | 'lab' | 'stub' | 'info';
 
-export type GalleryGroup = 'network' | 'device' | 'browser' | 'drivers';
+export type GalleryGroup = 'network' | 'device' | 'browser' | 'drivers' | 'examples';
 
 export type GalleryToolId =
   | 'hub'
@@ -28,7 +28,8 @@ export type GalleryToolId =
   | 'gestures'
   | 'matter'
   | 'sonos'
-  | 'simple-device';
+  | 'simple-device'
+  | 'webrtc-p2p';
 
 export interface GalleryToolMeta {
   id: Exclude<GalleryToolId, 'hub'>;

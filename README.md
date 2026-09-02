@@ -53,7 +53,7 @@ Drivers (`@agapi/matterjs`, `@agapi/sonos`, `@agapi/driver-template`, …) are s
 
 ### Stdlib Gallery
 
-Interactive labs for every `agapi.*` module and every driver, grouped as: **network** (sockets, TLS, HTTP, WebSocket, DNS, mDNS), **device** (network status, OS info, sensors, haptics, notifications, filesystem, NFC, biometrics, Bluetooth), **browser** (WebRTC, WebCodecs, Crypto, Web Animations, gestures — probes, not stdlib), and **drivers** (Matter, Sonos, SimpleDevice). Each lab pairs a working UI with the real code snippet it's calling — the gallery is meant to be read, not just clicked.
+Interactive labs for every `agapi.*` module and every driver, grouped as: **network** (sockets, TLS, HTTP, WebSocket, DNS, mDNS), **device** (network status, OS info, sensors, haptics, notifications, filesystem, NFC, biometrics, Bluetooth), **browser** (WebRTC, WebCodecs, Crypto, Web Animations, gestures — probes, not stdlib), **drivers** (Matter, Sonos, SimpleDevice), and **examples** (composed recipes spanning multiple `agapi.*` modules — e.g. serverless LAN WebRTC via mDNS + local WebSocket signaling). Each lab pairs a working UI with the real code snippet it's calling — the gallery is meant to be read, not just clicked.
 
 ### Quickstart
 
