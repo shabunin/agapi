@@ -586,16 +586,44 @@ console.log(await locale(), await hostname());`,
 
   bluetooth: [
     {
-      id: 'bt-planned',
-      title: 'Planned shape',
-      description: 'Not implemented — docs only',
+      id: 'bt-scan-connect',
+      title: 'Scan + connect',
+      description: 'Central/client role — community tauri-plugin-blec (btleplug), not Web Bluetooth',
       runnable: false,
-      code: `// FUTURE — host mobile BLE (not Web Bluetooth polyfill)
-// const devs = await agapi.bluetooth.scan({ timeoutMs: 5000 });
-// const gatt = await agapi.bluetooth.connect(devs[0].id);
-// await gatt.write(characteristic, data);
+      code: `const devices = [];
+await agapi.bluetooth.startScan((found) => {
+  devices.length = 0;
+  devices.push(...found);
+}, 5000);
 
-console.log('agapi.bluetooth is not available yet');`,
+await agapi.bluetooth.connect(devices[0].address, () => {
+  console.log('disconnected');
+});`,
+    },
+    {
+      id: 'bt-gatt',
+      title: 'GATT read/write/notify',
+      description: 'Against the currently connected device',
+      runnable: false,
+      code: `const services = await agapi.bluetooth.listServices(address);
+console.log(services); // [{ uuid, characteristics: [{ uuid, properties, descriptors }] }]
+
+const value = await agapi.bluetooth.readString(characteristicUuid);
+await agapi.bluetooth.sendString(characteristicUuid, 'hello');
+
+await agapi.bluetooth.subscribeString(characteristicUuid, null, (text) => {
+  console.log('notify:', text);
+});`,
+    },
+    {
+      id: 'bt-no-peripheral',
+      title: 'No peripheral/server mode',
+      description: 'btleplug (and blec) are central/client-only',
+      runnable: false,
+      code: `// agapi.bluetooth can scan/connect/read/write — it cannot advertise a GATT
+// service of its own. Peripheral/server role is a separate, unbuilt piece
+// (needs a different Rust stack, e.g. ble-peripheral-rust — see
+// STDLIB_ROADMAP.md C9).`,
     },
   ],
 

@@ -44,6 +44,11 @@ mdns-sd = { version = "0.20", features = ["serde"] }
 hostname = "0.4"
 if-addrs = "0.15"
 tauri-plugin-notification = "2"
+# Bluetooth LE central/client — community plugin (no official
+# @tauri-apps/plugin-* exists), wraps btleplug on desktop (Windows/macOS/
+# Linux) and a native Kotlin/Swift bridge on mobile (Android/iOS), all from
+# one crate — unlike biometric/haptics/nfc below it isn't gated to mobile.
+tauri-plugin-blec = "0.12"
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-biometric = "2"

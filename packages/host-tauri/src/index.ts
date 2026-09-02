@@ -11,6 +11,7 @@ import { createBiometricHost } from './biometric';
 import { createHapticsHost } from './haptics';
 import { createNfcHost } from './nfc';
 import { createFsHost } from './fs';
+import { createBluetoothHost } from './bluetooth';
 
 export { TauriNetworkProvider } from './net/provider';
 export { TauriTcpSocket } from './net/socket';
@@ -26,6 +27,7 @@ export { createBiometricHost, TauriBiometricHost } from './biometric';
 export { createHapticsHost, TauriHapticsHost } from './haptics';
 export { createNfcHost, TauriNfcHost } from './nfc';
 export { createFsHost, TauriFsHost } from './fs';
+export { createBluetoothHost, TauriBluetoothHost } from './bluetooth';
 export * as tauriHttp from './http/index';
 export { net as tauriNet, dgram as tauriDgram } from './net/index';
 
@@ -66,6 +68,10 @@ export function createTauriHost(): AgapiHost {
     haptics: isMobile ? createHapticsHost() : undefined,
     nfc: isMobile ? createNfcHost() : undefined,
     fs: createFsHost(),
+    // tauri-plugin-blec compiles on every target from one Cargo dependency
+    // (btleplug desktop backends + native Android/iOS bridge) — unlike
+    // biometric/haptics/nfc above, no mobile gate needed.
+    bluetooth: createBluetoothHost(),
   };
 }
 
