@@ -223,6 +223,86 @@ export interface NfcHost {
 }
 
 /**
+ * BLE central/client — thin passthrough over the community `tauri-plugin-blec`
+ * (btleplug on desktop, native Kotlin/Swift bridge on Android/iOS). Field/
+ * function names mirror the plugin 1:1, same "not reimplemented" rule as
+ * `NfcHost` — there's no Node-shaped BLE API to conform to instead.
+ *
+ * Peripheral/server mode (advertising, GATT server) is **not** covered here —
+ * btleplug (and therefore blec) is central/client-only by design. See
+ * STDLIB_ROADMAP.md C9 for the separate peripheral-role plan.
+ */
+export interface BleDevice {
+  address: string;
+  name: string;
+  rssi: number;
+  isConnected: boolean;
+  isBonded: boolean;
+  services: string[];
+  serviceData: Record<string, number[]>;
+  manufacturerData: Record<number, number[]>;
+  txPowerLevel?: number;
+}
+
+export interface BleCharacteristic {
+  uuid: string;
+  /** Raw GATT properties bitmask (read/write/notify/…) — not decoded into flags. */
+  properties: number;
+  descriptors: string[];
+}
+
+export interface BleService {
+  uuid: string;
+  characteristics: BleCharacteristic[];
+}
+
+export type BleAdapterState = 'Unknown' | 'On' | 'Off';
+export type BleWriteType = 'withResponse' | 'withoutResponse';
+
+export interface BluetoothHost {
+  name: string;
+  checkPermissions(askIfDenied?: boolean): Promise<boolean>;
+  getAdapterState(): Promise<BleAdapterState>;
+  startScan(
+    onDevices: (devices: BleDevice[]) => void,
+    timeoutMs: number,
+    allowIbeacons?: boolean
+  ): Promise<void>;
+  stopScan(): Promise<void>;
+  onScanningChange(handler: (scanning: boolean) => void): Promise<void>;
+  connect(address: string, onDisconnect?: (() => void) | null, allowIbeacons?: boolean): Promise<void>;
+  disconnect(): Promise<void>;
+  onConnectionChange(handler: (connected: boolean) => void): Promise<void>;
+  listServices(address: string): Promise<BleService[]>;
+  getMtu(): Promise<number>;
+  read(characteristic: string, service?: string): Promise<number[]>;
+  readString(characteristic: string, service?: string): Promise<string>;
+  send(
+    characteristic: string,
+    data: number[],
+    writeType?: BleWriteType,
+    service?: string
+  ): Promise<void>;
+  sendString(
+    characteristic: string,
+    text: string,
+    writeType?: BleWriteType,
+    service?: string
+  ): Promise<void>;
+  subscribe(
+    characteristic: string,
+    service: string | null,
+    handler: (data: number[]) => void
+  ): Promise<void>;
+  subscribeString(
+    characteristic: string,
+    service: string | null,
+    handler: (text: string) => void
+  ): Promise<void>;
+  unsubscribe(characteristic: string, service?: string): Promise<void>;
+}
+
+/**
  * Scoped roots only — matches what the fs plugin's `fs:allow-app-*-recursive`
  * capability grants (see capabilities/default.json): app data/config/cache/
  * log dirs + temp. No arbitrary whole-disk root by design; an absolute path
@@ -297,6 +377,7 @@ export interface AgapiHost {
   haptics?: HapticsHost;
   nfc?: NfcHost;
   fs?: FsHost;
+  bluetooth?: BluetoothHost;
 }
 
 /** Runtime slot set by installStdlib(). */

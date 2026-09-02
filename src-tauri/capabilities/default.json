@@ -21,6 +21,7 @@
       ]
     },
     "websocket:default",
-    "notification:default"
+    "notification:default",
+    "blec:default"
   ]
 }

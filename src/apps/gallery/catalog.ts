@@ -98,9 +98,9 @@ export const GALLERY_TOOLS: GalleryToolMeta[] = [
   {
     id: 'bluetooth',
     title: 'Bluetooth',
-    blurb: 'BLE / classic hooks for device pairing and control.',
-    surface: 'host mobile API (planned)',
-    status: 'stub',
+    blurb: 'BLE scan, connect, GATT read/write/notify — central/client role.',
+    surface: 'agapi.bluetooth',
+    status: 'lab',
     accent: 'indigo',
     group: 'device',
   },

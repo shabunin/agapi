@@ -44,7 +44,7 @@ import DnsTool from './tools/DnsTool';
 import MdnsTool from './tools/MdnsTool';
 import NetworkStatusTool from './tools/NetworkStatusTool';
 import OsInfoTool from './tools/OsInfoTool';
-import BluetoothStub from './tools/BluetoothStub';
+import BluetoothTool from './tools/BluetoothTool';
 import SensorsStub from './tools/SensorsStub';
 import HapticsTool from './tools/HapticsTool';
 import NotificationsTool from './tools/NotificationsTool';
@@ -163,7 +163,7 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
     return <OsInfoTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'bluetooth') {
-    return <BluetoothStub onBack={() => setTool('hub')} />;
+    return <BluetoothTool onBack={() => setTool('hub')} />;
   }
   if (tool === 'sensors') {
     return <SensorsStub onBack={() => setTool('hub')} />;

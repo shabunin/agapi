@@ -31,6 +31,7 @@ Single namespace: **`window.agapi`** / **`globalThis.agapi`** (no top-level `win
 | `agapi.haptics` | `impact` / `notification` / `selection` / `vibrate` (mobile host, browser `navigator.vibrate` fallback) |
 | `agapi.nfc` | `isAvailable` / `scan` / `write` / `textRecord` / `uriRecord` (**mobile only** — Android/iOS) |
 | `agapi.fs` | `readFile` / `writeFile` / `appendFile` / `mkdir` / `readdir` / `stat` / `remove` / `exists` — scoped to app data/config/cache/log dirs + temp, ACL-enforced |
+| `agapi.bluetooth` | `checkPermissions` / `getAdapterState` / `startScan` / `stopScan` / `connect` / `disconnect` / `listServices` / `read(String)` / `send(String)` / `subscribe(String)` / `unsubscribe` — BLE **central/client only** (community `tauri-plugin-blec`, btleplug-based), desktop + Android; no peripheral/server mode |
 | `agapi.Buffer` | minimal subset (from/alloc/concat/toString) |
 | `agapi.process` | `env`, `platform`, `nextTick`, `cwd()` stub |
 | `agapi.host` | active host name (`tauri`, `mock`, …) |

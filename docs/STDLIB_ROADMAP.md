@@ -43,16 +43,16 @@ cf-runtime may later *map* `CF.ipv4address` / `CF.startMonitoring` → `agapi.de
 | **T1++** | `mdns.browse` / `publish` | ✅ lab (Tauri / mdns-sd) |
 | **T2** | `stream` / backpressure / `drain` | ❌ |
 | **T3** | `fs` subset | ✅ lab. Scoped to app data/config/cache/log dirs + temp (`fs:allow-app-*-recursive`), not whole-disk |
-| **T4** | **platform device** (network status, sensors, props, NFC, notify, bio, haptics, camera, BT) | 🟡 network status (C1), notifications (C5), biometric (C6, mobile-only), haptics (C7, mobile + browser fallback), NFC (C8, mobile-only) shipped; sensors/device-props/camera/BT ⏸ blocked — no official Tauri plugin for any of these yet, see C2/C3/C9 |
+| **T4** | **platform device** (network status, sensors, props, NFC, notify, bio, haptics, camera, BT) | 🟡 network status (C1), notifications (C5), biometric (C6, mobile-only), haptics (C7, mobile + browser fallback), NFC (C8, mobile-only), Bluetooth **client/central** (C9, community plugin) shipped; sensors/device-props/camera ⏸ blocked — no official Tauri plugin for any of these yet, see C2/C3. BT **peripheral/server** role also unbuilt — see C9 |
 | **T4b** | `crypto` (stdlib façade) | ❌ browser Web Crypto in gallery only |
 
 Globals after `installStdlib` today:  
-**`agapi.{net,dgram,http,dns,tls,mdns,device,notifications,biometric,haptics,nfc,fs,Buffer,process,host,version}`**.
-`agapi.device` is `getNetworkStatus()` + `watchNetwork()` only so far (see C1). `agapi.biometric`/`agapi.nfc` are **mobile-only** (Android/iOS — not compiled into desktop builds at all); `agapi.haptics` has a mobile host + `navigator.vibrate` browser fallback; `agapi.notifications` and `agapi.fs` work everywhere.
+**`agapi.{net,dgram,http,dns,tls,mdns,device,notifications,biometric,haptics,nfc,fs,bluetooth,Buffer,process,host,version}`**.
+`agapi.device` is `getNetworkStatus()` + `watchNetwork()` only so far (see C1). `agapi.biometric`/`agapi.nfc` are **mobile-only** (Android/iOS — not compiled into desktop builds at all); `agapi.haptics` has a mobile host + `navigator.vibrate` browser fallback; `agapi.notifications` and `agapi.fs` work everywhere; `agapi.bluetooth` works on desktop (Windows/macOS/Linux) + Android, **central/client role only** (see C9).
 
 Planned additions (names may refine):  
-**`agapi.sensors`**, **`agapi.crypto`**, later camera/bluetooth. More `agapi.device` fields (battery, brightness, volume, identity — C2). **`agapi.barcode`** (QR/barcode scan, C11) — official plugin exists, just not implemented yet, unlike C2/C3/C9.  
-⏸ **C2 (device props), C3 (sensors), and bluetooth (C9) are blocked**: no official `@tauri-apps/plugin-*` covers any of these today, and rolling a custom Rust/host implementation isn't a current priority. Re-check the official Tauri plugin list periodically — pick these back up once an official plugin lands.
+**`agapi.sensors`**, **`agapi.crypto`**, later camera. More `agapi.device` fields (battery, brightness, volume, identity — C2). **`agapi.barcode`** (QR/barcode scan, C11) — official plugin exists, just not implemented yet, unlike C2/C3. Bluetooth **peripheral/server** mode (advertise + GATT server) — separate stack from C9's client, still unbuilt.  
+⏸ **C2 (device props) and C3 (sensors) are blocked**: no official `@tauri-apps/plugin-*` covers either today, and rolling a custom Rust/host implementation isn't a current priority. Re-check the official Tauri plugin list periodically — pick these back up once an official plugin lands. Camera stays pulled too (no host plan). Bluetooth **client** unblocked via a community plugin (C9); Bluetooth **server** is a distinct, still-blocked piece (no cross-platform "one crate" solution covering Android).
 
 ---
 
@@ -101,7 +101,7 @@ Planned additions (names may refine):
 | mDNS | `agapi.mdns` | lab |
 | Network status | `agapi.device.getNetworkStatus` / `watchNetwork` | lab |
 | OS info | `@tauri-apps/plugin-os` (direct, not `agapi.*` yet) | lab |
-| Bluetooth | host ⏸ blocked (no official plugin) | stub |
+| Bluetooth | `agapi.bluetooth` (client/central, community `tauri-plugin-blec`) | lab |
 | Sensors | `agapi.sensors` | ⏸ blocked (no official plugin) |
 | Haptics | `agapi.haptics` | lab (mobile host + browser `navigator.vibrate` fallback) |
 | Notifications | `agapi.notifications` | lab (desktop + mobile) |
@@ -229,11 +229,45 @@ Official `@tauri-apps/plugin-nfc` — **Android/iOS only**. `scanType`/`options`
 loosely typed (`any`) in `NfcHost` — the upstream `ScanKind`/`TechKind`/`NFCRecord` tree is
 fairly deep and not worth re-declaring for a facade this thin.
 
-#### C9 — Camera / Bluetooth — ⏸ blocked, no official plugin
+#### C9 — Bluetooth — ✅ client/central shipped, server ⏸ blocked; camera still ⏸ blocked
 
-Stay host-mobile scoped; façades under `agapi.camera` / `agapi.bluetooth` when implemented — still **not** cf-runtime. Bluetooth has a gallery stub; camera's was pulled for now (no host plan yet) — re-add when there's an actual capability to stub against.
+**Client/central (2026-09-02): ✅ shipped.** No *official* `@tauri-apps/plugin-*` for Bluetooth exists,
+but the community plugin [`tauri-plugin-blec`](https://github.com/MnlPhlp/tauri-plugin-blec)
+(crate + `@mnlphlp/plugin-blec` npm package, v0.12.0) wraps
+[`btleplug`](https://github.com/deviceplug/btleplug) for desktop (Windows/macOS/Linux) and a
+native Kotlin/Swift bridge for mobile (Android/iOS) — one Cargo dependency, no per-platform
+gating needed (unlike biometric/haptics/nfc's `target.'cfg(android/ios)'` split). User decision:
+a mature, actively-maintained community plugin counts as "unblocked" for this purpose, same
+spirit as using `mdns-sd`/`if-addrs` directly elsewhere in this project.
 
-**Blocked (2026-07-28):** no official `@tauri-apps/plugin-*` for Bluetooth (or camera) today. Custom host isn't a priority right now — periodically re-check the official Tauri plugin registry and revisit once one exists.
+| API | Status |
+|-----|--------|
+| `agapi.bluetooth.checkPermissions()` / `getAdapterState()` | ✅ |
+| `agapi.bluetooth.startScan(onDevices, timeoutMs, allowIbeacons?)` / `stopScan()` / `onScanningChange(cb)` | ✅ |
+| `agapi.bluetooth.connect(address, onDisconnect?, allowIbeacons?)` / `disconnect()` / `onConnectionChange(cb)` | ✅ one active connection at a time (matches upstream — no address on `disconnect()`) |
+| `agapi.bluetooth.listServices(address)` / `getMtu()` | ✅ |
+| `agapi.bluetooth.read` / `readString` / `send` / `sendString` / `subscribe` / `subscribeString` / `unsubscribe` | ✅ thin passthrough, same "not reimplemented" rule as `NfcHost` |
+
+Platforms: Windows/macOS/Linux desktop (native, via btleplug) + Android (Tauri mobile plugin).
+iOS isn't a build target in this project today (no `src-tauri/gen/ios`), so untested there even
+though blec's CoreBluetooth backend should work in principle. Gallery lab:
+`src/apps/gallery/tools/BluetoothTool.tsx`.
+
+**Server/peripheral: ⏸ still blocked, and it's a genuinely separate problem from the client
+above** — `btleplug` (and therefore `blec`) is explicitly *host/central-mode only*; there is no
+extension path from the client plugin to a server role. Advertising a GATT service of our own
+needs a different Rust stack entirely:
+[`ble-peripheral-rust`](https://github.com/rohitsangwan01/ble-peripheral-rust) is the closest
+candidate — real backends for Linux (`bluer`/BlueZ), Windows (`windows` crate GATT service
+provider), and macOS/iOS (`objc2-core-bluetooth`) — but it has **no Android backend**, which
+would mean writing a custom Kotlin/JNI bridge from scratch (harder than NFC/biometric/haptics'
+plugins, since Android's `BluetoothGattServer` API is lower-level). Not started; revisit as a
+separate roadmap item, not a follow-on to the client work above.
+
+Camera: **Blocked (2026-07-28), unchanged.** No official `@tauri-apps/plugin-*` for camera
+today. Façade would be `agapi.camera` when implemented — still **not** cf-runtime. Its gallery
+stub was pulled for now (no host plan yet) — re-add when there's an actual capability to stub
+against.
 
 #### C10 — Crypto façade (optional)
 
@@ -355,7 +389,9 @@ agapi
 ├── haptics      # impact/notification/selection/vibrate — mobile + browser vibrate fallback [shipped]
 ├── crypto       # optional thin WebCrypto/host wrapper                   [planned]
 ├── barcode      # QR/barcode scan (official plugin-barcode-scanner) — mobile only [planned, C11]
-├── camera / bluetooth   # mobile                                         [blocked — no official plugin]
+├── bluetooth    # scan/connect/GATT read-write-notify — client/central, desktop + Android [shipped, C9]
+│                # (peripheral/server role — advertise + GATT server — still blocked, see C9)
+├── camera       # mobile                                                 [blocked — no official plugin]
 └── matter, …    # driver namespaces, installed on demand via agapi.use('matter') [planned — see Driver libraries]
 ```
 
@@ -388,6 +424,7 @@ interface NfcHost { /* session */ }
 interface NotificationsHost { /* show / permission */ }
 interface BiometricHost { /* authenticate */ }
 interface HapticsHost { /* impact */ }
+interface BluetoothHost { /* scan/connect/GATT — client/central only, no peripheral/server */ }
 
 interface AgapiHost {
   net: NetHost;
@@ -402,6 +439,7 @@ interface AgapiHost {
   notifications?: NotificationsHost;
   biometric?: BiometricHost;
   haptics?: HapticsHost;
+  bluetooth?: BluetoothHost;
 }
 ```
 
@@ -423,6 +461,7 @@ Missing host capability → clear error in façade (same pattern as `mdns` / `ht
 | 8 | `feat/agapi-nfc` | ✅ shipped: isAvailable/scan/write + gallery (mobile-only) |
 | 9 | `feat/cf-bridge-device` | **only then** map CF.* → agapi (optional) |
 | 10 | `feat/agapi-barcode` | ❌ not started — QR/barcode scan via official `@tauri-apps/plugin-barcode-scanner`, mobile-only (C11) |
+| 11 | `feat/agapi-bluetooth` | ✅ shipped: client/central via community `tauri-plugin-blec` — scan/connect/GATT read-write-notify + gallery (C9). Peripheral/server role ❌ not started, separate track |
 
 Do **not** mix cf-runtime GUI changes into platform host PRs.
 
@@ -461,4 +500,5 @@ driver work into a stdlib branch.
 | 2026-07-28 | **C5-C8 shipped:** `agapi.notifications` (`@tauri-apps/plugin-notification`, desktop+mobile), `agapi.biometric` and `agapi.nfc` (mobile-only — Android/iOS, not compiled into desktop builds at all: `target.'cfg(android/ios)'.dependencies` in `Cargo.toml`), `agapi.haptics` (mobile host + `navigator.vibrate` browser fallback in the stdlib facade). Verified real permission defaults from each plugin's own `permissions/default.toml` rather than trusting doc summaries — `haptics` has **no** default set at all (every `allow-*` must be listed explicitly), `os:default`/`biometric:default`/`nfc:default` exclude hostname/write respectively. New `capabilities/mobile.json` (`platforms: ["android","iOS"]`) holds the mobile-only permissions so desktop capabilities stay clean. Sensors/fs/Bluetooth gallery stubs unchanged (still genuinely not implemented) |
 | 2026-07-28 | **C2/C3/C9 marked blocked:** device properties (battery/brightness/volume/identity), sensors (accel/gyro/attitude/heading/location), and Bluetooth have no official `@tauri-apps/plugin-*` today. User decision: don't roll custom Rust hosts for these — not a priority. Periodically re-check the official Tauri plugin registry and revisit once one lands. Camera stays pulled (no host plan) |
 | 2026-07-28 | **C4 shipped:** `agapi.fs` on official `@tauri-apps/plugin-fs` — `readFile`/`readTextFile`/`writeFile`/`appendFile`/`mkdir`/`readdir`/`stat`/`remove`/`exists`, scoped via `baseDir` (appData/appConfig/appLocalData/appCache/appLog/temp). Found (by reading the plugin's own `permissions/*.toml`, not docs) that `capabilities/default.json` had `fs:read-all`/`fs:write-all` — genuinely unrestricted whole-disk access, not the narrower allowlist entries sitting next to them. User chose to tighten immediately: narrowed to `fs:allow-app-*-recursive` + `fs:allow-temp-write-recursive`, and added a new `fs_allow_read_path` Rust command (`AppHandle::fs_scope()`) so the CF project-open picker can still grant runtime read access to an arbitrary user-picked path without widening the static ACL — relies on `tauri-plugin-fs::resolve_path` ORing the static scope with this runtime scope. Gallery `fs` stub replaced with a real read/write/mkdir/readdir/stat/remove lab |
+| 2026-09-02 | **C9 client/central shipped:** `agapi.bluetooth` via community `tauri-plugin-blec` (btleplug desktop backends + native mobile bridge, one Cargo dependency, no mobile gating needed) — `checkPermissions`/`getAdapterState`/`startScan`/`stopScan`/`onScanningChange`/`connect`/`disconnect`/`onConnectionChange`/`listServices`/`getMtu`/`read(String)`/`send(String)`/`subscribe(String)`/`unsubscribe`, thin passthrough (same "not reimplemented" rule as `NfcHost`). Desktop (Windows/macOS/Linux) + Android; iOS untested (not a build target here yet). User decision: a mature, actively-maintained community plugin unblocks C9 even without an *official* Tauri plugin, same spirit as `mdns-sd`/`if-addrs`. Gallery stub replaced with a real scan/connect/GATT lab (`BluetoothTool.tsx`). Peripheral/server role researched and confirmed **separately blocked**: `btleplug` is central-only by design, no extension path; closest candidate for a future server (`ble-peripheral-rust`) covers Linux/Windows/macOS/iOS but has no Android backend — would need a from-scratch Kotlin/JNI bridge. Camera stays blocked, unchanged |
 | 2026-07-29 | **Driver libraries section added — Matter (`@agapi/matterjs`) first results:** real mDNS discovery + full PASE/CASE commissioning + OnOff/ColorControl/LevelControl device control + multi-admin commissioning windows (Basic/Enhanced) + `agapi.fs` persistence, all verified live against a physical Nanoleaf RGB Matter light. Controller role only so far. Added three forward roadmap items for Matter: (1) a Device/accessory-role demo panel (matter.js `ServerNode`, not just Controller), (2) QR-code commissioning scanner for mobile (needs C11), (3) BLE transport (needs C9, currently blocked). Added **C11 — barcode/QR scanner** (`@tauri-apps/plugin-barcode-scanner`) — unlike C2/C3/C9 this has an official plugin already, just not implemented yet; motivated directly by Matter's QR commissioning need. Documented the planned `agapi.use(name)` on-demand driver installer for CF/iViewer-style raw project scripts (no `import` available to them) — keeps the zero-build authoring model while preserving lazy-loading of heavy driver packages |

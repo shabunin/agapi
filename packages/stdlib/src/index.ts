@@ -11,6 +11,7 @@ export type {
   HapticsHost,
   NfcHost,
   FsHost,
+  BluetoothHost,
 } from './host';
 export { getHost, setHost } from './host';
 export { installStdlib, uninstallStdlib } from './install';
@@ -81,6 +82,26 @@ export {
   remove as fsRemove,
   exists as fsExists,
 } from './fs/index';
+export {
+  default as bluetooth,
+  checkPermissions as bluetoothCheckPermissions,
+  getAdapterState as bluetoothGetAdapterState,
+  startScan as bluetoothStartScan,
+  stopScan as bluetoothStopScan,
+  onScanningChange as bluetoothOnScanningChange,
+  connect as bluetoothConnect,
+  disconnect as bluetoothDisconnect,
+  onConnectionChange as bluetoothOnConnectionChange,
+  listServices as bluetoothListServices,
+  getMtu as bluetoothGetMtu,
+  read as bluetoothRead,
+  readString as bluetoothReadString,
+  send as bluetoothSend,
+  sendString as bluetoothSendString,
+  subscribe as bluetoothSubscribe,
+  subscribeString as bluetoothSubscribeString,
+  unsubscribe as bluetoothUnsubscribe,
+} from './bluetooth/index';
 export type {
   DnsLookupAddress,
   DnsLookupOptions,
@@ -108,6 +129,11 @@ export type {
   FsBaseDir,
   FsDirEntry,
   FsFileInfo,
+  BleDevice,
+  BleService,
+  BleCharacteristic,
+  BleAdapterState,
+  BleWriteType,
 } from './host';
 
 // Re-export protocol payload type for convenience

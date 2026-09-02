@@ -61,6 +61,7 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_websocket::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_blec::init())
         .invoke_handler(tauri::generate_handler![
             set_devtools,
             is_devtools_open,

@@ -19,7 +19,9 @@ android {
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.agapi.desktop"
-        minSdk = 24
+        // tauri-plugin-blec's Android library declares minSdk 26 — bumped from
+        // the tauri-android-init default of 24 (Android 7.0) to satisfy it.
+        minSdk = 26
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
