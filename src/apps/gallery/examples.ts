@@ -44,7 +44,8 @@ export type ExampleToolId =
   | 'gestures'
   | 'matter'
   | 'sonos'
-  | 'simple-device';
+  | 'simple-device'
+  | 'webrtc-p2p';
 
 export const TOOL_EXAMPLES: Record<ExampleToolId, CodeSnippet[]> = {
   sockets: [
@@ -1144,6 +1145,89 @@ npx tsx packages/driver-template/dev/control.ts 127.0.0.1 2300 power off
 #   src/protocol/     ← pure (no agapi / node)
 #   src/agapi-transport.ts
 #   dev/node-transport.ts`,
+    },
+  ],
+  'webrtc-p2p': [
+    {
+      id: 'webrtc-p2p-host',
+      title: 'Host (offerer)',
+      description: 'Advertise on mDNS, accept one signaling connection, negotiate',
+      runnable: false,
+      code: `// RTCPeerConnection is a browser global — stdlib never wraps it.
+// agapi only provides the LAN rendezvous: discovery + signaling transport.
+const server = new agapi.http.WebSocketServer({ port: 8787 });
+await agapi.mdns.publish({ type: '_agapi-webrtc._tcp', name: 'my-device', port: 8787 });
+
+server.on('connection', async (conn) => {
+  const pc = new RTCPeerConnection({ iceServers: [] }); // LAN — no STUN/TURN
+  const dc = pc.createDataChannel('agapi');
+  dc.onopen = () => dc.send('hello from host');
+
+  pc.onicecandidate = (e) => {
+    if (e.candidate) conn.send(JSON.stringify({ type: 'ice', candidate: e.candidate }));
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  conn.send(JSON.stringify({ type: 'offer', sdp: pc.localDescription }));
+
+  conn.on('message', async (raw) => {
+    const msg = JSON.parse(raw);
+    if (msg.type === 'answer') await pc.setRemoteDescription(msg.sdp);
+    else if (msg.type === 'ice') await pc.addIceCandidate(msg.candidate);
+  });
+});`,
+    },
+    {
+      id: 'webrtc-p2p-join',
+      title: 'Join (answerer)',
+      description: 'Discover via mDNS, dial the signaling WebSocket, negotiate',
+      runnable: false,
+      code: `const found = [];
+const handle = agapi.mdns.browse('_agapi-webrtc._tcp', (ev) => {
+  if (ev.type === 'resolved') found.push(ev.service);
+});
+// ...pick one, then:
+handle.stop();
+
+const ws = new agapi.http.WebSocket(\`ws://\${host.addresses[0]}:\${host.port}\`);
+let pc;
+
+ws.onmessage = async (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type === 'offer') {
+    pc = new RTCPeerConnection({ iceServers: [] });
+    pc.ondatachannel = (e) => {
+      e.channel.onmessage = (m) => console.log('recv:', m.data);
+    };
+    pc.onicecandidate = (e) => {
+      if (e.candidate) ws.send(JSON.stringify({ type: 'ice', candidate: e.candidate }));
+    };
+    await pc.setRemoteDescription(msg.sdp);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    ws.send(JSON.stringify({ type: 'answer', sdp: pc.localDescription }));
+  } else if (msg.type === 'ice') {
+    await pc.addIceCandidate(msg.candidate);
+  }
+};`,
+    },
+    {
+      id: 'webrtc-p2p-no-server',
+      title: 'Why no STUN/TURN',
+      description: "Same LAN means host ICE candidates connect directly",
+      runnable: false,
+      code: `// STUN discovers your *public* reflexive address for NAT traversal across
+// the internet. TURN relays media/data when a direct path can't be found.
+// Neither matters on a single local network: RTCPeerConnection already
+// gathers "host" candidates (your real local IPs), and with both peers on
+// the same LAN those connect directly — iceServers: [] is enough.
+//
+// The only thing WebRTC can't do on its own is the initial SDP/ICE
+// handshake (signaling) — that's not part of the spec by design. This
+// example builds that handshake entirely out of agapi.* primitives
+// (mdns + WebSocketServer/WebSocket), so the whole flow — discovery,
+// signaling, and the resulting P2P data channel — never leaves the LAN.`,
     },
   ],
 };

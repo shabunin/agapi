@@ -27,6 +27,7 @@ import {
   Sparkles,
   Vibrate,
   Video,
+  Waypoints,
   Wifi,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -56,6 +57,7 @@ import WebrtcInfo from './tools/WebrtcInfo';
 import WebcodecsInfo from './tools/WebcodecsInfo';
 import WebAnimationsTool from './tools/WebAnimationsTool';
 import GesturesTool from './tools/GesturesTool';
+import WebrtcP2PTool from './tools/WebrtcP2PTool';
 
 // Keep driver tools out of the main gallery chunk — loaded only when opened.
 const SonosTool = lazy(() => import('./tools/SonosTool'));
@@ -91,6 +93,7 @@ const ICONS: Record<Exclude<GalleryToolId, 'hub'>, LucideIcon> = {
   matter: Radar,
   sonos: Speaker,
   'simple-device': Cable,
+  'webrtc-p2p': Waypoints,
 };
 
 const GROUP_LABEL: Record<GalleryGroup, string> = {
@@ -98,6 +101,7 @@ const GROUP_LABEL: Record<GalleryGroup, string> = {
   device: 'Device',
   browser: 'Browser APIs',
   drivers: 'Drivers',
+  examples: 'Examples',
 };
 
 const ACCENT: Record<string, string> = {
@@ -198,6 +202,9 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
   if (tool === 'gestures') {
     return <GesturesTool onBack={() => setTool('hub')} />;
   }
+  if (tool === 'webrtc-p2p') {
+    return <WebrtcP2PTool onBack={() => setTool('hub')} />;
+  }
   if (tool === 'matter') {
     return (
       <Suspense
@@ -277,7 +284,7 @@ export default function GalleryApp({ onBack }: GalleryAppProps) {
           </p>
         </div>
 
-        {(['network', 'device', 'browser', 'drivers'] as const).map((group) => {
+        {(['network', 'device', 'browser', 'drivers', 'examples'] as const).map((group) => {
           const tools = GALLERY_TOOLS.filter((t) => t.group === group);
           if (tools.length === 0) return null;
           return (
