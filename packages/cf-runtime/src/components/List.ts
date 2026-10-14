@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Rectangle } from 'pixi.js';
 import { ScrollBox } from '@pixi/ui';
 import { CFNode } from '../parser';
 import { joinStore } from '../joinStore';
@@ -17,6 +17,11 @@ export function renderList(
         type: isVertical ? 'vertical' : 'horizontal',
         elementsMargin: 0,
     });
+    // The list takes drags anywhere in its box, not just on what its rows draw.
+    // ScrollBox is interactive, so everything in it is hit tested as such: its
+    // rows' masks and bounds don't take part (eventMode none), or they'd take
+    // the taps meant for the rows' buttons.
+    scrollBox.hitArea = new Rectangle(0, 0, node.w, node.h);
 
     const headerName = node.headerSub;
     const footerName = node.footerSub;
@@ -56,6 +61,7 @@ export function renderList(
         const sContainer = renderer.createSubpage(subDef, listId ? `l${listId}` : undefined, listIndex);
         
         const itemMask = new Graphics().rect(0, 0, subDef.w, subDef.h).fill(0xffffff);
+        itemMask.eventMode = 'none';
         sContainer.addChild(itemMask);
         sContainer.mask = itemMask;
 
@@ -80,6 +86,7 @@ export function renderList(
         renderer.currentScope = prevScope;
         
         const itemMask = new Graphics().rect(0, 0, subDef.w, subDef.h).fill(0xffffff);
+        itemMask.eventMode = 'none';
         sContainer.addChild(itemMask);
         sContainer.mask = itemMask;
         
@@ -148,6 +155,31 @@ export function renderList(
     
     const cfObj = renderer.cfApi;
 
+    // iViewer's ListWillStartScrollingEvent / ListDidEndScrollingEvent: the
+    // position starts changing; it holds still for a moment with nothing
+    // holding the list (a drag, a fling slowing down, a listScroll animating)
+    let scrolling = false;
+    let stillSince = 0;
+    let lastMovePos: number | null = null;
+    const trackScrolling = (lId: string, count: number, first: number, numVisible: number, pos: number) => {
+        const now = performance.now();
+        if (lastMovePos === null) {
+            lastMovePos = pos;
+            return;
+        }
+        if (pos !== lastMovePos) {
+            lastMovePos = pos;
+            stillSince = now;
+            if (!scrolling) {
+                scrolling = true;
+                cfObj?.dispatchEvent?.("LIST_WILL_START_SCROLLING_EVENT", lId);
+            }
+        } else if (scrolling && !(scrollBox as any).isDragging && now - stillSince > 120) {
+            scrolling = false;
+            cfObj?.dispatchEvent?.("LIST_DID_END_SCROLLING_EVENT", lId, count, first, numVisible, pos);
+        }
+    };
+
     const updateScrollInfo = () => {
         if (!cfObj || !listId || !contentName) return;
         
@@ -182,6 +214,7 @@ export function renderList(
         const normId = listId.startsWith("l") ? listId.substring(1) : listId;
         
         const scrollInfo = { count: totalCount, first, numVisible, scrollPosition: pos };
+        trackScrolling(lId, totalCount, first, numVisible, pos);
         
         if (cfObj.listsStore[normId]) {
             (cfObj.listsStore[normId] as any)._scrollInfo = scrollInfo;
@@ -308,6 +341,7 @@ export function renderList(
 
             const placeholder = new Container();
             const boundsGfx = new Graphics().rect(0, 0, subDef.w, subDef.h).fill({ color: 0x000000, alpha: 0.0001 });
+            boundsGfx.eventMode = 'none';
             placeholder.addChild(boundsGfx);
 
             const itemId = scrollBox.addItem(placeholder);

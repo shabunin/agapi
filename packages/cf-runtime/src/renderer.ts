@@ -13,6 +13,8 @@ import { renderImage } from './components/Image';
 import { renderText } from './components/Text';
 import { renderVideo } from './components/Video';
 import { renderWeb } from './components/Web';
+import { renderInput } from './components/Input';
+import { DomLayer } from './domLayer';
 import { bindGestures } from './components/Gestures';
 
 // Pixi containers/points aren't DOM, so there's no WAAPI/getAnimations() to lean
@@ -61,6 +63,11 @@ export class CFRenderer {
   nodesMap: Record<string, Container[]> = {};
   pageHistory: string[] = [];
   cfApi?: any; // Reference to the CF API instance for components to use without accessing window.CF
+  /**
+   * A project file's URL (a web view's `url="page.html"`, url() in an input
+   * theme). Default: the image map's URL for that name, else the name as is.
+   */
+  fileUrl?: (name: string) => string | undefined;
   fpsContainer?: Container;
   fpsText?: Text;
   fpsBg?: Graphics;
@@ -277,6 +284,7 @@ export class CFRenderer {
   }
 
   destroy() {
+    DomLayer.of(this)?.destroy();
     if (this.fpsTicker) {
       this.app.ticker.remove(this.fpsTicker);
     }
@@ -383,6 +391,17 @@ export class CFRenderer {
     });
   }
 
+  /** A URL as the GUI gives it, made loadable here: project files by name, anything with a scheme as is. */
+  resolveUrl(url: string): string {
+    if (!url || /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('//')) return url;
+    const name = url.replace(/\\/g, '/');
+    const fromHost = this.fileUrl?.(name);
+    if (fromHost) return fromHost;
+    const leaf = name.split('/').pop() || name;
+    const key = Object.keys(this.imageMap).find((k) => k.toLowerCase() === name.toLowerCase() || k.toLowerCase() === leaf.toLowerCase());
+    return key ? this.imageMap[key] : url;
+  }
+
   /** Gets image URL from a background-image CSS prop like url(file.png) */
   getBgImage(cssProp?: string): string | null {
     if (!cssProp) return null;
@@ -411,6 +430,7 @@ export class CFRenderer {
     node.j = resolveJoin(node.j);
 
     const container = new Container();
+    (container as any).cfNode = node;
     let effW = node.w || 0;
     let effH = node.h || 0;
     if (node.type === "subpage" && node.name && this.project.subpages[node.name]) {
@@ -505,12 +525,14 @@ export class CFRenderer {
       }
     };
 
-    if (node.j && node.j !== "0") {
+    if (node.type === "input") {
+      const s = resolveJoin(node.attributes?.s);
+      if (s && s !== "0") addJoinMap("s" + s);
+    } else if (node.j && node.j !== "0") {
       if (node.type === "slider" || node.type === "gauge" || node.type === "knob") {
         addJoinMap("a" + node.j);
       } else if (
         node.type === "txt" ||
-        node.type === "input" ||
         node.type === "img" ||
         node.type === "video" ||
         node.type === "web"
@@ -622,6 +644,8 @@ export class CFRenderer {
       renderVideo(node, container, this);
     } else if (node.type === "web") {
       renderWeb(node, container, this);
+    } else if (node.type === "input") {
+      renderInput(node, container, this, cssState0, listPrefix, listIndex);
     }
 
     // Apply actual dimensions unconditionally
@@ -638,12 +662,14 @@ export class CFRenderer {
     if (!dh) dh = 50;
 
     const boundsGfx = new Graphics().rect(0, 0, dw, dh).fill({ color: 0x000000, alpha: 0.0001 });
+    // only there for bounds: never a hit target (inside a list everything is hit tested)
+    boundsGfx.eventMode = 'none';
     container.addChild(boundsGfx);
 
     if (this.debugMode) {
       const debugGfx = new Graphics();
       let isUnrecognized = false;
-      if (!["btn", "img", "txt", "list", "subpage", "gauge", "slider", "video", "web"].includes(node.type)) {
+      if (!["btn", "img", "txt", "list", "subpage", "gauge", "slider", "video", "web", "input"].includes(node.type)) {
         isUnrecognized = true;
       }
       debugGfx.rect(0, 0, dw, dh);
@@ -759,6 +785,7 @@ export class CFRenderer {
     if (def.w > 0 && def.h > 0) {
       container.hitArea = new Rectangle(0, 0, def.w, def.h);
       const boundsGfx = new Graphics().rect(0, 0, def.w, def.h).fill({ color: 0x000000, alpha: 0.0001 });
+      boundsGfx.eventMode = 'none';
       container.addChild(boundsGfx);
     }
 

@@ -439,6 +439,14 @@ export function renderButton(
         }
     });
 
+    /** A list being dragged took the touch (a device cancels it): the press is undone, nothing is released. */
+    const inDraggedList = (): boolean => {
+        for (let p: Container | null = container.parent; p; p = p.parent) {
+            if ((p as any).isDragging === 2) return true;
+        }
+        return false;
+    };
+
     const handleUp = () => {
         stopRepeat();
         if (!isBtnDown && node.sim !== "0") return; // if sim!==0, we only care if we were down
@@ -451,6 +459,8 @@ export function renderButton(
                 reflectState();
             }
         }
+
+        if (inDraggedList()) return;
 
         if (actionGroups.length > 0) {
             const currentGroup = actionGroups[currentActionGroupIndex];

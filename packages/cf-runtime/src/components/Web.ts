@@ -1,42 +1,110 @@
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Container } from 'pixi.js';
 import { CFNode } from '../parser';
 import { joinStore } from '../joinStore';
 import { CFRenderer } from '../renderer';
+import { DomLayer } from '../domLayer';
 
+/**
+ * A web view: an <iframe> over the canvas (see DomLayer).
+ *
+ * Joins: `j` (serial) is the URL - setting it loads the page; `title`
+ * (serial) gets the page title; `back` / `forward` / `refresh` / `stop`
+ * (digital) act on a rising edge. A browser hides other sites' pages from
+ * the preview, so the title, and back / forward through links followed
+ * inside the page, work for same-origin pages only; back / forward through
+ * the URLs the GUI loaded always work.
+ */
 export function renderWeb(
     node: CFNode,
     container: Container,
     renderer: CFRenderer
 ) {
-    const webJoin = (node.j && node.j !== "0") ? node.j : null;
-    
-    // In a real application, you would create an IFRAME DOM element and position it over the canvas.
-    // For PixiJS natively, we can only draw a placeholder.
-    const placeholder = new Graphics().rect(0, 0, node.w, node.h).fill({ color: 0x333333, alpha: 0.9 }).stroke({ color: 0x666666, width: 2 });
-    container.addChild(placeholder);
+    const a = node.attributes;
+    const join = (name: string) => (a[name] && a[name] !== '0' ? a[name] : null);
+    const urlJoin = node.j && node.j !== '0' ? node.j : null;
+    const titleJoin = join('title');
+    const scope = renderer.currentScope ?? undefined;
 
-    const txt = new Text({
-        text: "Web View",
-        style: new TextStyle({ fill: '#ffffff', fontSize: 16, align: 'center' })
-    });
-    txt.x = node.w / 2;
-    txt.y = node.h / 2;
-    txt.anchor.set(0.5);
-    container.addChild(txt);
+    const frame = document.createElement('iframe');
+    frame.title = 'web view';
+    frame.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture; clipboard-write');
+    frame.setAttribute('allowfullscreen', '');
+    // a page without a background of its own shows on white, as in a browser
+    Object.assign(frame.style, { border: '0', background: '#fff', colorScheme: 'normal' });
 
-    const updateUrl = (url: string) => {
-        if (!url) return;
-        txt.text = `Web View\n${url}`;
-        // Update iframe src here if it existed
+    // the URLs loaded, for back / forward
+    const history: string[] = [];
+    let at = -1;
+    let current = '';
+
+    const open = (url: string) => {
+        current = url;
+        frame.src = url ? renderer.resolveUrl(url) : 'about:blank';
+    };
+    const go = (url: string) => {
+        if (!url || url === current) return;
+        history.splice(at + 1);
+        history.push(url);
+        at = history.length - 1;
+        open(url);
     };
 
-    const initVal = (webJoin && joinStore.has(webJoin, "s")) ? joinStore.get(webJoin, "s") : node.content;
-    if (typeof initVal === 'string') updateUrl(initVal);
-    
-    if (webJoin) {
-        joinStore.on(webJoin, "s", (val) => {
+    frame.addEventListener('load', () => {
+        // same-origin pages only: their own URL (links followed) and title
+        try {
+            const doc = frame.contentDocument;
+            const href = frame.contentWindow?.location.href;
+            if (href && href !== 'about:blank' && href !== renderer.resolveUrl(current) && history[at] !== href) {
+                history.splice(at + 1);
+                history.push(href);
+                at = history.length - 1;
+                current = href;
+            }
+            if (titleJoin && doc) joinStore.set(titleJoin, 's', doc.title || '');
+        } catch {
+            // another site's page: nothing to read
+        }
+    });
+
+    const initial = urlJoin && joinStore.has(urlJoin, 's') ? String(joinStore.get(urlJoin, 's')) : (a.url || '');
+    go(initial);
+    if (urlJoin) {
+        joinStore.on(urlJoin, 's', (val) => {
             if (container.destroyed) return;
-            if (typeof val === 'string') updateUrl(val);
-        });
+            go(String(val ?? ''));
+        }, scope);
     }
+
+    const onRise = (name: string, act: () => void) => {
+        const j = join(name);
+        if (!j) return;
+        let last = !!joinStore.get(j, 'd');
+        joinStore.on(j, 'd', (val) => {
+            const on = !!val;
+            if (on && !last && !container.destroyed) act();
+            last = on;
+        }, scope);
+    };
+    onRise('back', () => {
+        if (at > 0) open(history[--at]);
+    });
+    onRise('forward', () => {
+        if (at < history.length - 1) open(history[++at]);
+    });
+    onRise('refresh', () => {
+        try {
+            frame.contentWindow?.location.reload();
+        } catch {
+            open(current);
+        }
+    });
+    onRise('stop', () => {
+        try {
+            frame.contentWindow?.stop();
+        } catch {
+            // another site's page can't be stopped from here
+        }
+    });
+
+    DomLayer.for(renderer).add({ el: frame, container, w: node.w, h: node.h });
 }

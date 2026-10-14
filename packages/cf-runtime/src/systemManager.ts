@@ -77,6 +77,14 @@ export class ControlSystem {
     private tcpSocket?: ITcpSocket;
     private udpSocket?: IUdpSocket;
     private tcpServer?: ITcpServer;
+    /** The clients connected to the TCP server, each with what it sent that no feedback matched yet. */
+    private tcpClients: { socket: ITcpSocket; buffer: string }[] = [];
+    /**
+     * The client whose data was processed last: what the system sends goes back
+     * to it (a request's reply, as two web views loading from the GUI's own
+     * HTTP server at once need), to every client while none has sent anything.
+     */
+    private tcpSender?: ITcpSocket;
     private cfApi: CFAPI;
     public feedbackRules: CFNode[];
     private autoReconnect: boolean;
@@ -225,6 +233,8 @@ export class ControlSystem {
             }
             this.tcpServer = undefined;
         }
+        this.tcpClients = [];
+        this.tcpSender = undefined;
         this.connections = [];
     }
 
@@ -325,17 +335,27 @@ export class ControlSystem {
         this.tcpServer.on('connection', (clientSocket: ITcpSocket) => {
             const remote = `${clientSocket.remoteAddress || '?'}:${clientSocket.remotePort || 0}`;
             this.connections.push(remote);
+            const client = { socket: clientSocket, buffer: '' };
+            this.tcpClients.push(client);
 
             this.cfApi.dispatchEvent(this.cfApi.ConnectionStatusChangeEvent, this.name, true, remote);
 
             clientSocket.on('data', (data: Uint8Array | string) => {
-                const str = this._bytesToString(data);
-                this.buffer += str;
-                this._processBuffer();
+                // this client's own buffer: requests from two clients don't mix
+                this.buffer = client.buffer + this._bytesToString(data);
+                this.tcpSender = clientSocket;
+                try {
+                    this._processBuffer();
+                } finally {
+                    client.buffer = this.buffer;
+                    this.buffer = '';
+                }
             });
 
             clientSocket.on('close', () => {
                 this.connections = this.connections.filter(c => c !== remote);
+                this.tcpClients = this.tcpClients.filter(c => c !== client);
+                if (this.tcpSender === clientSocket) this.tcpSender = undefined;
                 this.cfApi.dispatchEvent(this.cfApi.ConnectionStatusChangeEvent, this.name, false, remote);
             });
 
@@ -742,11 +762,11 @@ export class ControlSystem {
     }
 
     private _writeToSocket(data: string, outputFormat?: number) {
-        // CF.UTF8 = 1, CF.BINARY = 0 (default)
+        // CF.UTF8 = 1, CF.BINARY = 0 (default); scripts pass the CF.UTF8 constant too
         const UTF8_FORMAT = 1;
         let payload: string | Uint8Array;
 
-        if (outputFormat === UTF8_FORMAT) {
+        if (outputFormat === UTF8_FORMAT || (outputFormat as unknown) === 'UTF8') {
             payload = new TextEncoder().encode(data);
         } else {
             // BINARY: each char → byte (strip to 0xFF)
@@ -764,6 +784,15 @@ export class ControlSystem {
             this.udpSocket.send(buf, 0, buf.length, this.port, this.address);
         } else if (this.tcpSocket) {
             this.tcpSocket.write(payload as any);
+        } else if (this.tcpServer) {
+            const to = this.tcpSender ? [this.tcpSender] : this.tcpClients.map((c) => c.socket);
+            for (const socket of to) {
+                try {
+                    socket.write(payload as any);
+                } catch (e) {
+                    console.warn(`[System ${this.name}] write to client failed:`, e);
+                }
+            }
         }
     }
 
