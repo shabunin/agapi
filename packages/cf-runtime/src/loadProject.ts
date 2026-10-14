@@ -1,6 +1,7 @@
 import { Application } from 'pixi.js';
 import { parseGUI, type CFProject } from './parser';
 import { CFRenderer, stopAllAnimations } from './renderer';
+import { DomLayer } from './domLayer';
 import { CFAPI } from './cf';
 import { joinStore } from './joinStore';
 import {
@@ -40,6 +41,12 @@ export interface LoadProjectOptions {
   orientation?: Orientation;
   debugMode?: boolean;
   onOrientationChange?: (o: Orientation) => void;
+  /**
+   * A project file's URL by its name in the GUI (a web view's
+   * `url="page.html"`, url() in an input theme), when the host serves more
+   * than the images in `imageMap`.
+   */
+  fileUrl?: (name: string) => string | undefined;
   /** Previous renderer to tear down (stage children only). */
   previousRenderer?: CFRenderer | null;
   /** Destroy previous web menu when reloading a project. */
@@ -102,6 +109,7 @@ export async function loadProject(options: LoadProjectOptions): Promise<LoadProj
   stopAllAnimations();
 
   if (options.previousRenderer) {
+    DomLayer.of(options.previousRenderer)?.clear();
     options.app?.stage.removeChildren();
   }
   joinStore.clear();
@@ -123,6 +131,8 @@ export async function loadProject(options: LoadProjectOptions): Promise<LoadProj
       width,
       height,
       backgroundColor: 0x000000,
+      // transparent where web views / input fields are: they show through (see DomLayer)
+      backgroundAlpha: 0,
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
       antialias: true,
@@ -133,6 +143,7 @@ export async function loadProject(options: LoadProjectOptions): Promise<LoadProj
   }
 
   const renderer = new CFRenderer(app, project, imageMap);
+  renderer.fileUrl = options.fileUrl;
   renderer.targetOrientation = orientation;
   renderer.setDebugMode(debugMode);
 

@@ -271,7 +271,8 @@ export class CFAPI implements CFContext {
                 if (Array.isArray(w.joins) && !w.joins.includes(joinArg)) return;
                 if (typeof w.joins === 'string' && w.joins !== joinArg) return;
             }
-            if ((eventName === this.ListWillStartScrollingEvent || 
+            if ((eventName === this.InputFieldEditedEvent ||
+                 eventName === this.ListWillStartScrollingEvent || 
                  eventName === this.ListDidScrollEvent || 
                  eventName === this.ListDidEndScrollingEvent) && w.joins && args.length >= 1) {
                 const joinArg = args[0];

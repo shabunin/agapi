@@ -162,6 +162,11 @@ export function loadGUI(
     console.log(`CF STUB: loadGUI(${url}, ${JSON.stringify(settings)})`);
 }
 
+/**
+ * A project file (an image the GUI uses, a page next to it): fetched from the
+ * host, handed to `callback(data)` as text (CF.UTF8) or as a binary string,
+ * one char per byte (CF.BINARY). Not found: `callback(null)`.
+ */
 export function loadAsset(
     ctx: CFContext,
     assetName: string,
@@ -169,10 +174,27 @@ export function loadAsset(
     callback?: CFCallback,
     cache?: string
 ) {
-    console.log(`CF STUB: loadAsset(${assetName}, ${dataEncoding}, ${cache})`);
-    if (callback) {
-        callback(assetName, null);
-    }
+    const renderer = (ctx as any).renderer;
+    const url: string = renderer?.resolveUrl ? renderer.resolveUrl(assetName) : assetName;
+    fetch(url, cache === 'NOCACHE' ? { cache: 'no-store' } : undefined)
+        .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`))))
+        .then((buf) => {
+            const bytes = new Uint8Array(buf);
+            let data: string;
+            if (dataEncoding === 'BINARY') {
+                data = '';
+                for (let i = 0; i < bytes.length; i += 0x8000) {
+                    data += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000) as unknown as number[]);
+                }
+            } else {
+                data = new TextDecoder().decode(bytes);
+            }
+            callback?.(data);
+        })
+        .catch((e) => {
+            console.warn(`CF.loadAsset(${assetName}): ${e?.message ?? e}`);
+            callback?.(null);
+        });
 }
 
 export function setDeviceProperty(
