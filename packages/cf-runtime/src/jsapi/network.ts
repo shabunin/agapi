@@ -1,5 +1,6 @@
 import { CFContext, CFCallback } from './types';
 import { TokenEngine, TokenContext } from '../tokenEngine';
+import { getHost } from '@agapi/stdlib/host';
 
 export function send(
     ctx: CFContext,
@@ -35,7 +36,7 @@ export function request(
     console.log(`CF.request to ${url} with method ${method}`);
     
     const doRequest = async () => {
-        if ((window as any).__TAURI_INTERNALS__) {
+        if (getHost()?.http) {
             try {
                 // Prefer stdlib http (host-backed after installStdlib)
                 const http = (await import('@agapi/stdlib/http')).default;
