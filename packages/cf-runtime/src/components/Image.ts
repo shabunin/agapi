@@ -2,6 +2,7 @@ import { Container, Sprite, Assets } from 'pixi.js';
 import { CFNode } from '../parser';
 import { joinStore } from '../joinStore';
 import { CFRenderer } from '../renderer';
+import { getHost } from '@agapi/stdlib/host';
 
 export function renderImage(
     node: CFNode,
@@ -45,7 +46,7 @@ export function renderImage(
                 const doLoad = async () => {
                     let blobUrl = loadUrl;
                     const mode = (window as any).CF?.imageRequestMode || 'custom';
-                    if ((window as any).__TAURI_INTERNALS__ && mode === 'custom') {
+                    if (getHost()?.http && mode === 'custom') {
                         try {
                             const http = (await import('@agapi/stdlib/http')).default;
                             const result = await new Promise<{ body: Uint8Array, contentType: string }>((resolve, reject) => {
