@@ -692,7 +692,9 @@ export class ControlSystem {
         const setToken = item.attributes['settoken'] === '1';
 
         if (target && datatype) {
-            const finalJoin = datatype + target;
+            // GUI Designer writes targets already prefixed ("d1", "s10",
+            // "l1:0:s2"); only bare numbers ("10") take the datatype prefix.
+            const finalJoin = /^[adsl]/i.test(target) ? target : datatype + target;
             this.cfApi.setJoin(finalJoin, processedValue, true);
         }
 
